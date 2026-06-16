@@ -1,0 +1,173 @@
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import '../i18n';
+import { NavigationProvider, useNav } from './context/NavigationContext';
+import { Navbar } from './components/sections/Navbar';
+import { HeroSection } from './components/sections/HeroSection';
+import { StatsBar } from './components/sections/StatsBar';
+import { RecentListings } from './components/sections/RecentListings';
+import { AdoptionSpotlight } from './components/sections/AdoptionSpotlight';
+import { LostFound } from './components/sections/LostFound';
+import { HowItWorks } from './components/sections/HowItWorks';
+import { VetDirectory } from './components/sections/VetDirectory';
+import { PetStores } from './components/sections/PetStores';
+import { CommunityFeed } from './components/sections/CommunityFeed';
+import { PremiumSection } from './components/sections/PremiumSection';
+import { TrustSafety } from './components/sections/TrustSafety';
+import { AppDownload } from './components/sections/AppDownload';
+import { Footer } from './components/sections/Footer';
+import { MobileBottomNav } from './components/sections/MobileBottomNav';
+import { FeedPage } from './pages/FeedPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { MessagingPage } from './pages/MessagingPage';
+import { CreateListingPage } from './pages/CreateListingPage';
+import { PetDetailPage } from './pages/PetDetailPage';
+import { SearchPage } from './pages/SearchPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { AuthPage } from './pages/AuthPage';
+import { ProfileSetupPage } from './pages/ProfileSetupPage';
+import { FavoritesPage } from './pages/FavoritesPage';
+import { PremiumPage } from './pages/PremiumPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { VetProfilePage } from './pages/VetProfilePage';
+import { PetShopProfilePage } from './pages/PetShopProfilePage';
+import { ShelterProfilePage } from './pages/ShelterProfilePage';
+import { FAQPage } from './pages/FAQPage';
+import { ContactPage } from './pages/ContactPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
+interface CurrentUser { name: string; role: string; avatar?: string; }
+
+function AppInner() {
+  const { i18n } = useTranslation();
+  const { nav, navigate, goBack } = useNav();
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [pendingProfileSetup, setPendingProfileSetup] = useState<{ role: string } | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('petconnect-theme');
+    if (saved === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, []);
+
+  useEffect(() => {
+    const isAr = i18n.language === 'ar';
+    document.documentElement.setAttribute('dir', isAr ? 'rtl' : 'ltr');
+    document.documentElement.setAttribute('lang', i18n.language);
+    document.body.style.fontFamily = isAr
+      ? "'Cairo', 'Inter', system-ui, sans-serif"
+      : "'Inter', system-ui, sans-serif";
+  }, [i18n.language]);
+
+  const handleLoginSuccess = (user: CurrentUser) => {
+    setCurrentUser(user);
+    setIsLoggedIn(true);
+    if (user.role !== 'owner' && nav.params?.isNew === 'true') {
+      setPendingProfileSetup({ role: user.role });
+    } else {
+      navigate('home');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setCurrentUser(null);
+    navigate('home');
+  };
+
+  // Profile setup flow (post-registration)
+  if (pendingProfileSetup) {
+    return (
+      <ProfileSetupPage
+        role={pendingProfileSetup.role as any}
+        onComplete={() => { setPendingProfileSetup(null); navigate('dashboard'); }}
+        onSkip={() => { setPendingProfileSetup(null); navigate('home'); }}
+      />
+    );
+  }
+
+  // Auth pages — no layout chrome
+  if (['login', 'register', 'forgot-password', 'reset-password'].includes(nav.page)) {
+    return (
+      <AuthPage
+        initialView={nav.page === 'register' ? 'register' : 'login'}
+        onSuccess={handleLoginSuccess}
+        onNavigate={navigate}
+      />
+    );
+  }
+
+  // Full-screen inner pages
+  const PAGES: Partial<Record<string, JSX.Element>> = {
+    feed:           <FeedPage onBack={goBack} />,
+    dashboard:      <DashboardPage onBack={goBack} onNavigate={navigate} />,
+    messages:       <MessagingPage onBack={goBack} />,
+    'create-listing': <CreateListingPage onBack={goBack} onSuccess={() => navigate('dashboard')} />,
+    'pet-detail':   <PetDetailPage onBack={goBack} onNavigate={navigate} listingId={nav.params?.id} />,
+    search:         <SearchPage onBack={goBack} onNavigate={navigate} initialQuery={nav.params?.q} />,
+    profile:        <ProfilePage onBack={goBack} onNavigate={navigate} userId={nav.params?.id} />,
+    notifications:  <NotificationsPage onBack={goBack} />,
+    favorites:      <FavoritesPage onBack={goBack} onNavigate={navigate} />,
+    premium:        <PremiumPage onBack={goBack} onNavigate={navigate} />,
+    settings:       <SettingsPage onBack={goBack} onNavigate={navigate} />,
+    'vet-profile':  <VetProfilePage onBack={goBack} onNavigate={navigate} />,
+    'shop-profile': <PetShopProfilePage onBack={goBack} onNavigate={navigate} />,
+    'shelter-profile': <ShelterProfilePage onBack={goBack} onNavigate={navigate} />,
+    faq:            <FAQPage onBack={goBack} onNavigate={navigate} />,
+    contact:        <ContactPage onBack={goBack} onNavigate={navigate} />,
+    'not-found':    <NotFoundPage onNavigate={navigate} />,
+    // vets/stores scroll to relevant sections on home — redirect
+    vets:           null,
+    stores:         null,
+  };
+
+  if (nav.page !== 'home') {
+    const page = PAGES[nav.page];
+    if (page) return page;
+    // Unknown page → 404
+    return <NotFoundPage onNavigate={navigate} />;
+  }
+
+  // Home / landing page
+  return (
+    <div className="min-h-screen bg-white dark:bg-[#060C12] overflow-x-hidden">
+      <Navbar
+        onNavigate={navigate}
+        isLoggedIn={isLoggedIn}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
+      <main>
+        <div className="fixed top-0 left-0 right-0 z-0">
+          <HeroSection onNavigate={navigate} />
+        </div>
+        <div className="relative z-10 mt-[100vh] bg-white dark:bg-[#060C12]">
+          <StatsBar />
+          <RecentListings onNavigate={navigate} />
+          <AdoptionSpotlight onNavigate={navigate} />
+          <LostFound />
+          <HowItWorks onNavigate={navigate} />
+          <VetDirectory />
+          <PetStores />
+          <CommunityFeed onOpenFeed={() => navigate('feed')} />
+          <PremiumSection />
+          <TrustSafety />
+          <AppDownload />
+        </div>
+      </main>
+      <Footer />
+      <MobileBottomNav onNavigate={navigate} isLoggedIn={isLoggedIn} />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <NavigationProvider>
+      <AppInner />
+    </NavigationProvider>
+  );
+}
