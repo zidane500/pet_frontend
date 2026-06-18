@@ -14,9 +14,9 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
-import { useCreateListing } from "../../../hooks/useListings";
-import { uploadApi } from "../../../api/upload";
-import { useAuthStore } from "../../../store/authStore";
+import { useCreateListing } from "../../hooks/useListings";
+import { uploadApi } from "../../api/upload";
+import { useAuthStore } from "../../store/authStore";
 
 interface CreateListingPageProps {
   onBack: () => void;

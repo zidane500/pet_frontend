@@ -13,6 +13,7 @@ import {
   Square,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useSearch } from "../../hooks/useSearch";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface SearchResult {
@@ -568,12 +569,19 @@ export function SearchPage({
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
 
-  const [query, setQuery] = useState(initialQuery);
-  const [activeFilters, setActiveFilters] =
-    useState<ActiveFilters>(DEFAULT_FILTERS);
-  const [sortBy, setSortBy] = useState<
-    "newest" | "oldest" | "priceAsc" | "priceDesc"
-  >("newest");
+  const {
+    query,
+    setQuery,
+    activeFilters,
+    setFilters: setActiveFilters,
+    sortBy,
+    setSortBy,
+    results: filteredResults,
+    total,
+    isLoading,
+    clearFilters: handleClear,
+  } = useSearch(initialQuery);
+
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -581,56 +589,12 @@ export function SearchPage({
     inputRef.current?.focus();
   }, []);
 
-  const getFilteredResults = useCallback(() => {
-    let r = [...MOCK_RESULTS];
-
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      r = r.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.breed.toLowerCase().includes(q) ||
-          item.species.toLowerCase().includes(q),
-      );
-    }
-
-    if (activeFilters.type.length)
-      r = r.filter((item) => activeFilters.type.includes(item.type));
-    if (activeFilters.species.length)
-      r = r.filter((item) => activeFilters.species.includes(item.species));
-    if (activeFilters.city)
-      r = r.filter(
-        (item) =>
-          item.city === activeFilters.city ||
-          item.governorate === activeFilters.city,
-      );
-    if (activeFilters.vaccinated) r = r.filter((item) => item.vaccinated);
-    if (activeFilters.adoptable)
-      r = r.filter((item) => item.type === "adoption");
-    if (activeFilters.minPrice)
-      r = r.filter((item) => item.price >= parseInt(activeFilters.minPrice));
-    if (activeFilters.maxPrice)
-      r = r.filter((item) => item.price <= parseInt(activeFilters.maxPrice));
-
-    if (sortBy === "newest")
-      r.sort((a, b) => a.postedAgo.localeCompare(b.postedAgo));
-    if (sortBy === "oldest")
-      r.sort((a, b) => b.postedAgo.localeCompare(a.postedAgo));
-    if (sortBy === "priceAsc") r.sort((a, b) => a.price - b.price);
-    if (sortBy === "priceDesc") r.sort((a, b) => b.price - a.price);
-
-    return r;
-  }, [query, activeFilters, sortBy]);
-
-  const filteredResults = getFilteredResults();
   const hasActiveFilters =
     activeFilters.type.length > 0 ||
     activeFilters.species.length > 0 ||
-    activeFilters.city ||
+    !!activeFilters.city ||
     activeFilters.vaccinated ||
     activeFilters.adoptable;
-
-  const handleClear = () => setActiveFilters(DEFAULT_FILTERS);
 
   return (
     <div
@@ -741,7 +705,7 @@ export function SearchPage({
               style={{ fontSize: "12px" }}
             >
               <span className="font-bold text-[var(--pc-text-primary)]">
-                {filteredResults.length}
+                {total}
               </span>{" "}
               résultats
             </p>
@@ -767,7 +731,17 @@ export function SearchPage({
 
         {/* Results Grid */}
         <main className="flex-1 p-4">
-          {filteredResults.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-[3/4] rounded-2xl animate-pulse"
+                  style={{ background: "var(--pc-surface)" }}
+                />
+              ))}
+            </div>
+          ) : filteredResults.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -800,7 +774,7 @@ export function SearchPage({
                 <ResultCard
                   key={r.id}
                   result={r}
-                  onClick={() => onNavigate("pet-detail", { id: r.id })}
+                  onClick={() => onNavigate("pet-detail", { id: String(r.id) })}
                 />
               ))}
             </div>
