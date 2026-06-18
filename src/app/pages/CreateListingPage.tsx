@@ -1,9 +1,22 @@
-import { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useTranslation } from 'react-i18next';
+import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft, ArrowRight, Check, MapPin, Phone, Mail, ChevronDown,
-} from 'lucide-react';
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  MapPin,
+  Phone,
+  Mail,
+  ChevronDown,
+  Upload,
+  X,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import { useCreateListing } from "../../../hooks/useListings";
+import { uploadApi } from "../../../api/upload";
+import { useAuthStore } from "../../../store/authStore";
 
 interface CreateListingPageProps {
   onBack: () => void;
@@ -11,26 +24,89 @@ interface CreateListingPageProps {
 }
 
 const CATEGORIES = [
-  { id: 'adoption', icon: '💚', label: 'Adoption', desc: 'Donnez une chance à un animal', color: 'from-emerald-500 to-teal-500' },
-  { id: 'vente', icon: '💰', label: 'Vente', desc: 'Vendez votre animal', color: 'from-blue-500 to-indigo-500' },
-  { id: 'perdu', icon: '🔍', label: 'Animal perdu', desc: 'Signalez un animal disparu', color: 'from-orange-500 to-red-500' },
-  { id: 'trouve', icon: '🏠', label: 'Animal trouvé', desc: 'Vous avez trouvé un animal', color: 'from-purple-500 to-violet-500' },
-  { id: 'accouplement', icon: '🤝', label: 'Accouplement', desc: 'Recherche pour reproduction', color: 'from-yellow-500 to-amber-500' },
-  { id: 'conseils', icon: '💡', label: 'Conseil / Discussion', desc: 'Partagez votre expérience', color: 'from-pink-500 to-rose-500' },
+  {
+    id: "adoption",
+    icon: "💚",
+    label: "Adoption",
+    desc: "Donnez une chance à un animal",
+    color: "from-emerald-500 to-teal-500",
+  },
+  {
+    id: "vente",
+    icon: "💰",
+    label: "Vente",
+    desc: "Vendez votre animal",
+    color: "from-blue-500 to-indigo-500",
+  },
+  {
+    id: "perdu",
+    icon: "🔍",
+    label: "Animal perdu",
+    desc: "Signalez un animal disparu",
+    color: "from-orange-500 to-red-500",
+  },
+  {
+    id: "trouve",
+    icon: "🏠",
+    label: "Animal trouvé",
+    desc: "Vous avez trouvé un animal",
+    color: "from-purple-500 to-violet-500",
+  },
+  {
+    id: "accouplement",
+    icon: "🤝",
+    label: "Accouplement",
+    desc: "Recherche pour reproduction",
+    color: "from-yellow-500 to-amber-500",
+  },
+  {
+    id: "conseils",
+    icon: "💡",
+    label: "Conseil / Discussion",
+    desc: "Partagez votre expérience",
+    color: "from-pink-500 to-rose-500",
+  },
 ];
 
-const SPECIES = ['Chien', 'Chat', 'Lapin', 'Oiseau', 'Reptile', 'Autre'];
-const AGE_UNITS = ['mois', 'ans'];
-const SEX_OPTIONS = ['Mâle', 'Femelle', 'Inconnu'];
-
+const SPECIES = [
+  "Chien",
+  "Chat",
+  "Lapin",
+  "Oiseau",
+  "Reptile",
+  "Poisson",
+  "Rongeur",
+  "Autre",
+];
+const AGE_UNITS = ["mois", "ans"];
+const SEX_OPTIONS = ["Mâle", "Femelle", "Inconnu"];
 const GOVERNORATES = [
-  'Ariana', 'Béja', 'Ben Arous', 'Bizerte', 'Gabès', 'Gafsa', 'Jendouba',
-  'Kairouan', 'Kasserine', 'Kébili', 'Kef', 'Mahdia', 'Manouba', 'Médenine',
-  'Monastir', 'Nabeul', 'Sfax', 'Sidi Bouzid', 'Siliana', 'Sousse',
-  'Tataouine', 'Tozeur', 'Tunis', 'Zaghouan',
+  "Ariana",
+  "Béja",
+  "Ben Arous",
+  "Bizerte",
+  "Gabès",
+  "Gafsa",
+  "Jendouba",
+  "Kairouan",
+  "Kasserine",
+  "Kébili",
+  "Kef",
+  "Mahdia",
+  "Manouba",
+  "Médenine",
+  "Monastir",
+  "Nabeul",
+  "Sfax",
+  "Sidi Bouzid",
+  "Siliana",
+  "Sousse",
+  "Tataouine",
+  "Tozeur",
+  "Tunis",
+  "Zaghouan",
 ];
-
-const STEP_LABELS = ['Catégorie', 'Infos', 'Photos', 'Localisation', 'Publier'];
+const STEP_LABELS = ["Catégorie", "Infos", "Photos", "Localisation", "Publier"];
 
 interface FormData {
   category: string;
@@ -52,198 +128,25 @@ interface FormData {
 }
 
 const initialForm: FormData = {
-  category: '',
-  title: '',
-  species: '',
-  breed: '',
-  ageValue: '',
-  ageUnit: 'ans',
-  sex: '',
-  price: '',
+  category: "",
+  title: "",
+  species: "",
+  breed: "",
+  ageValue: "",
+  ageUnit: "ans",
+  sex: "",
+  price: "",
   isFree: false,
   vaccinated: false,
   sterilized: false,
-  description: '',
-  governorate: '',
-  city: '',
-  phone: '',
-  email: '',
+  description: "",
+  governorate: "",
+  city: "",
+  phone: "",
+  email: "",
 };
 
-export function CreateListingPage({ onBack, onSuccess }: CreateListingPageProps) {
-  const { i18n } = useTranslation();
-  const isRtl = i18n.language === 'ar';
-  const [step, setStep] = useState(1);
-  const [direction, setDirection] = useState(1);
-  const [form, setForm] = useState<FormData>(initialForm);
-  const [published, setPublished] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const updateForm = (field: keyof FormData, value: string | boolean) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  const canProceed = () => {
-    if (step === 1) return !!form.category;
-    if (step === 2) return !!form.title && !!form.species;
-    if (step === 3) return true;
-    if (step === 4) return !!form.governorate;
-    return true;
-  };
-
-  const goNext = () => {
-    if (!canProceed()) return;
-    setDirection(1);
-    setStep(s => Math.min(5, s + 1));
-  };
-
-  const goBack = () => {
-    if (step === 1) { onBack(); return; }
-    setDirection(-1);
-    setStep(s => Math.max(1, s - 1));
-  };
-
-  const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '60%' : '-60%', opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-60%' : '60%', opacity: 0 }),
-  };
-
-  return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen flex flex-col"
-      style={{ background: 'var(--pc-surface)', color: 'var(--pc-text-primary)' }}
-    >
-      {/* Sticky Header */}
-      <div
-        className="sticky top-0 z-30 glass-card border-b"
-        style={{ borderColor: 'var(--pc-border)' }}
-      >
-        <div className="max-w-3xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={goBack}
-              className="p-2 rounded-xl transition-colors hover:bg-black/5 dark:hover:bg-white/10"
-            >
-              <ArrowLeft size={20} style={{ color: 'var(--pc-text-secondary)' }} />
-            </button>
-            <h1 className="text-base font-semibold flex-1" style={{ color: 'var(--pc-text-primary)' }}>
-              {step < 5 ? `Étape ${step} / 5 — ${STEP_LABELS[step - 1]}` : 'Récapitulatif'}
-            </h1>
-          </div>
-
-          {/* Progress dots */}
-          <div className="flex items-center gap-1">
-            {STEP_LABELS.map((label, idx) => {
-              const num = idx + 1;
-              const isCompleted = num < step;
-              const isActive = num === step;
-              return (
-                <div key={num} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300"
-                      style={{
-                        background: isCompleted || isActive ? 'var(--pc-primary)' : 'var(--pc-border)',
-                        color: isCompleted || isActive ? '#fff' : 'var(--pc-text-secondary)',
-                      }}
-                    >
-                      {isCompleted ? <Check size={12} /> : num}
-                    </div>
-                    <span
-                      className="text-[9px] mt-0.5 hidden sm:block whitespace-nowrap"
-                      style={{ color: isActive ? 'var(--pc-primary)' : 'var(--pc-text-secondary)' }}
-                    >
-                      {label}
-                    </span>
-                  </div>
-                  {idx < STEP_LABELS.length - 1 && (
-                    <div
-                      className="flex-1 h-0.5 mx-1 rounded-full transition-all duration-300"
-                      style={{ background: num < step ? 'var(--pc-primary)' : 'var(--pc-border)' }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="max-w-3xl mx-auto px-4 py-6">
-          <AnimatePresence mode="wait" custom={direction}>
-            <motion.div
-              key={step}
-              custom={direction}
-              variants={slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            >
-              {step === 1 && <Step1 form={form} updateForm={updateForm} />}
-              {step === 2 && <Step2 form={form} updateForm={updateForm} />}
-              {step === 3 && <Step3 fileInputRef={fileInputRef} />}
-              {step === 4 && <Step4 form={form} updateForm={updateForm} />}
-              {step === 5 && !published && (
-                <Step5 form={form} onPublish={() => setPublished(true)} />
-              )}
-              {step === 5 && published && (
-                <SuccessState
-                  onView={onSuccess}
-                  onAnother={() => { setForm(initialForm); setStep(1); setPublished(false); }}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Sticky bottom nav */}
-      {!(step === 5 && published) && (
-        <div
-          className="sticky bottom-0 z-30 glass-card border-t"
-          style={{ borderColor: 'var(--pc-border)' }}
-        >
-          <div className="max-w-3xl mx-auto px-4 py-3 flex gap-3">
-            <button
-              onClick={goBack}
-              className="flex-1 py-3 rounded-2xl font-semibold text-sm border transition-colors"
-              style={{
-                borderColor: 'var(--pc-border)',
-                color: 'var(--pc-text-secondary)',
-                background: 'transparent',
-              }}
-            >
-              {step === 1 ? 'Annuler' : 'Retour'}
-            </button>
-            {step < 5 && (
-              <button
-                onClick={goNext}
-                disabled={!canProceed()}
-                className="flex-[2] py-3 rounded-2xl font-semibold text-sm text-white flex items-center justify-center gap-2 transition-all"
-                style={{
-                  background: canProceed()
-                    ? 'linear-gradient(135deg, var(--pc-primary), #2ecc8a)'
-                    : 'var(--pc-border)',
-                  cursor: canProceed() ? 'pointer' : 'not-allowed',
-                }}
-              >
-                Suivant
-                <ArrowRight size={16} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Step 1: Category ─── */
+// ─── Step 1 ───────────────────────────────────────────────────────────────────
 function Step1({
   form,
   updateForm,
@@ -253,39 +156,53 @@ function Step1({
 }) {
   return (
     <div>
-      <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-        Quel type d'annonce souhaitez-vous créer ?
+      <h2
+        className="text-xl font-bold mb-1"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
+        Type d'annonce
       </h2>
-      <p className="text-sm mb-5" style={{ color: 'var(--pc-text-secondary)' }}>
-        Sélectionnez la catégorie qui correspond le mieux à votre annonce
+      <p className="text-sm mb-5" style={{ color: "var(--pc-text-secondary)" }}>
+        Choisissez la catégorie qui correspond le mieux
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {CATEGORIES.map(cat => {
+      <div className="grid grid-cols-2 gap-3">
+        {CATEGORIES.map((cat) => {
           const selected = form.category === cat.id;
           return (
             <motion.button
               key={cat.id}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => updateForm('category', cat.id)}
-              className="relative p-4 rounded-2xl text-left border-2 glass-card overflow-hidden"
-              style={{ borderColor: selected ? 'var(--pc-primary)' : 'transparent' }}
+              type="button"
+              whileTap={{ scale: 0.97 }}
+              onClick={() => updateForm("category", cat.id)}
+              className={[
+                "relative text-left p-4 rounded-2xl border-2 transition-all",
+                selected
+                  ? "border-[var(--pc-primary)] bg-[var(--pc-primary)]/5"
+                  : "border-[var(--pc-border)] bg-[var(--pc-surface-alt)] hover:border-[var(--pc-primary)]/40",
+              ].join(" ")}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${cat.color} opacity-10`} />
               {selected && (
-                <div
-                  className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                  style={{ background: 'var(--pc-primary)' }}
-                >
+                <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[var(--pc-primary)] flex items-center justify-center">
                   <Check size={11} className="text-white" />
-                </div>
+                </span>
               )}
-              <span className="text-2xl block mb-2">{cat.icon}</span>
-              <span className="text-sm font-bold block" style={{ color: 'var(--pc-text-primary)' }}>
+              <div
+                className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center text-xl mb-3`}
+              >
+                {cat.icon}
+              </div>
+              <p
+                className="font-bold text-sm"
+                style={{ color: "var(--pc-text-primary)" }}
+              >
                 {cat.label}
-              </span>
-              <span className="text-xs" style={{ color: 'var(--pc-text-secondary)' }}>
+              </p>
+              <p
+                className="text-xs mt-0.5"
+                style={{ color: "var(--pc-text-secondary)" }}
+              >
                 {cat.desc}
-              </span>
+              </p>
             </motion.button>
           );
         })}
@@ -294,7 +211,7 @@ function Step1({
   );
 }
 
-/* ─── Step 2: Pet Info ─── */
+// ─── Step 2 ───────────────────────────────────────────────────────────────────
 function Step2({
   form,
   updateForm,
@@ -305,269 +222,418 @@ function Step2({
   const charCount = form.description.length;
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold" style={{ color: 'var(--pc-text-primary)' }}>
+      <h2
+        className="text-xl font-bold"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
         Informations sur l'animal
       </h2>
 
-      {/* Title */}
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-          Titre de l'annonce <span style={{ color: '#ef4444' }}>*</span>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
+          Titre de l'annonce <span style={{ color: "#ef4444" }}>*</span>
         </label>
         <input
           type="text"
           value={form.title}
-          onChange={e => updateForm('title', e.target.value)}
+          onChange={(e) => updateForm("title", e.target.value)}
           placeholder="Ex: Max — Berger Allemand 3 ans"
           className="w-full px-4 py-3 rounded-2xl border text-sm outline-none"
           style={{
-            background: 'var(--pc-surface-alt)',
-            borderColor: form.title ? 'var(--pc-primary)' : 'var(--pc-border)',
-            color: 'var(--pc-text-primary)',
+            background: "var(--pc-surface-alt)",
+            borderColor: form.title ? "var(--pc-primary)" : "var(--pc-border)",
+            color: "var(--pc-text-primary)",
           }}
         />
       </div>
 
-      {/* Species + Breed */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-            Espèce <span style={{ color: '#ef4444' }}>*</span>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--pc-text-primary)" }}
+          >
+            Espèce <span style={{ color: "#ef4444" }}>*</span>
           </label>
           <div className="relative">
             <select
               value={form.species}
-              onChange={e => updateForm('species', e.target.value)}
+              onChange={(e) => updateForm("species", e.target.value)}
               className="w-full px-4 py-3 rounded-2xl border text-sm outline-none appearance-none pr-8"
               style={{
-                background: 'var(--pc-surface-alt)',
-                borderColor: form.species ? 'var(--pc-primary)' : 'var(--pc-border)',
-                color: 'var(--pc-text-primary)',
+                background: "var(--pc-surface-alt)",
+                borderColor: form.species
+                  ? "var(--pc-primary)"
+                  : "var(--pc-border)",
+                color: "var(--pc-text-primary)",
               }}
             >
               <option value="">Choisir…</option>
-              {SPECIES.map(s => <option key={s} value={s}>{s}</option>)}
+              {SPECIES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--pc-text-secondary)' }} />
+            <ChevronDown
+              size={14}
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: "var(--pc-text-secondary)" }}
+            />
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>Race</label>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--pc-text-primary)" }}
+          >
+            Race
+          </label>
           <input
             type="text"
             value={form.breed}
-            onChange={e => updateForm('breed', e.target.value)}
+            onChange={(e) => updateForm("breed", e.target.value)}
             placeholder="Ex: Berger Allemand"
             className="w-full px-4 py-3 rounded-2xl border text-sm outline-none"
             style={{
-              background: 'var(--pc-surface-alt)',
-              borderColor: 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
+              background: "var(--pc-surface-alt)",
+              borderColor: "var(--pc-border)",
+              color: "var(--pc-text-primary)",
             }}
           />
         </div>
       </div>
 
-      {/* Age */}
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>Âge</label>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
+          Âge
+        </label>
         <div className="flex gap-2">
           <input
             type="number"
             value={form.ageValue}
-            onChange={e => updateForm('ageValue', e.target.value)}
+            onChange={(e) => updateForm("ageValue", e.target.value)}
             placeholder="Ex: 3"
             min="0"
             className="flex-1 px-4 py-3 rounded-2xl border text-sm outline-none"
             style={{
-              background: 'var(--pc-surface-alt)',
-              borderColor: 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
+              background: "var(--pc-surface-alt)",
+              borderColor: "var(--pc-border)",
+              color: "var(--pc-text-primary)",
             }}
           />
           <div className="relative">
             <select
               value={form.ageUnit}
-              onChange={e => updateForm('ageUnit', e.target.value)}
-              className="px-4 py-3 rounded-2xl border text-sm outline-none appearance-none pr-7"
+              onChange={(e) => updateForm("ageUnit", e.target.value)}
+              className="px-4 py-3 rounded-2xl border text-sm outline-none appearance-none pr-8"
               style={{
-                background: 'var(--pc-surface-alt)',
-                borderColor: 'var(--pc-border)',
-                color: 'var(--pc-text-primary)',
+                background: "var(--pc-surface-alt)",
+                borderColor: "var(--pc-border)",
+                color: "var(--pc-text-primary)",
               }}
             >
-              {AGE_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              {AGE_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
             </select>
-            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--pc-text-secondary)' }} />
+            <ChevronDown
+              size={14}
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: "var(--pc-text-secondary)" }}
+            />
           </div>
         </div>
       </div>
 
-      {/* Sex */}
-      <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--pc-text-primary)' }}>Sexe</label>
-        <div className="flex gap-2">
-          {SEX_OPTIONS.map(opt => (
-            <button
-              key={opt}
-              onClick={() => updateForm('sex', opt)}
-              className="flex-1 py-2.5 rounded-2xl border text-sm font-medium transition-all"
-              style={{
-                borderColor: form.sex === opt ? 'var(--pc-primary)' : 'var(--pc-border)',
-                background: form.sex === opt ? 'var(--pc-primary)' : 'var(--pc-surface-alt)',
-                color: form.sex === opt ? '#fff' : 'var(--pc-text-secondary)',
-              }}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Price */}
-      <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>Prix</label>
-        <div className="flex gap-3 items-center">
-          <input
-            type="number"
-            value={form.price}
-            onChange={e => updateForm('price', e.target.value)}
-            disabled={form.isFree}
-            placeholder="Prix en DT"
-            className="flex-1 px-4 py-3 rounded-2xl border text-sm outline-none"
-            style={{
-              background: form.isFree ? 'var(--pc-border)' : 'var(--pc-surface-alt)',
-              borderColor: 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
-              opacity: form.isFree ? 0.5 : 1,
-            }}
-          />
-          <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={form.isFree}
-              onChange={e => updateForm('isFree', e.target.checked)}
-              className="w-4 h-4 rounded"
-            />
-            <span className="text-sm" style={{ color: 'var(--pc-text-primary)' }}>Gratuit</span>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--pc-text-primary)" }}
+          >
+            Sexe
           </label>
+          <div className="flex gap-2">
+            {SEX_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => updateForm("sex", opt)}
+                className="flex-1 py-2 rounded-xl border text-xs font-medium transition-all"
+                style={{
+                  background:
+                    form.sex === opt
+                      ? "var(--pc-primary)"
+                      : "var(--pc-surface-alt)",
+                  borderColor:
+                    form.sex === opt ? "var(--pc-primary)" : "var(--pc-border)",
+                  color:
+                    form.sex === opt ? "white" : "var(--pc-text-secondary)",
+                }}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--pc-text-primary)" }}
+          >
+            Prix
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isFree}
+                onChange={(e) => updateForm("isFree", e.target.checked)}
+                className="accent-[var(--pc-primary)]"
+              />
+              <span
+                className="text-sm"
+                style={{ color: "var(--pc-text-secondary)" }}
+              >
+                Gratuit / Adoption
+              </span>
+            </label>
+            {!form.isFree && (
+              <div className="relative">
+                <input
+                  type="number"
+                  value={form.price}
+                  onChange={(e) => updateForm("price", e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  className="w-full px-4 py-2 rounded-xl border text-sm outline-none pr-12"
+                  style={{
+                    background: "var(--pc-surface-alt)",
+                    borderColor: "var(--pc-border)",
+                    color: "var(--pc-text-primary)",
+                  }}
+                />
+                <span
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold"
+                  style={{ color: "var(--pc-text-secondary)" }}
+                >
+                  DT
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Toggles */}
       <div className="flex gap-4">
-        <ToggleField label="Vacciné" value={form.vaccinated} onChange={v => updateForm('vaccinated', v)} />
-        <ToggleField label="Stérilisé" value={form.sterilized} onChange={v => updateForm('sterilized', v)} />
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.vaccinated}
+            onChange={(e) => updateForm("vaccinated", e.target.checked)}
+            className="accent-[var(--pc-primary)]"
+          />
+          <span
+            className="text-sm"
+            style={{ color: "var(--pc-text-secondary)" }}
+          >
+            Vacciné
+          </span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.sterilized}
+            onChange={(e) => updateForm("sterilized", e.target.checked)}
+            className="accent-[var(--pc-primary)]"
+          />
+          <span
+            className="text-sm"
+            style={{ color: "var(--pc-text-secondary)" }}
+          >
+            Stérilisé
+          </span>
+        </label>
       </div>
 
-      {/* Description */}
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>Description</label>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
+          Description
+        </label>
         <textarea
           value={form.description}
-          onChange={e => updateForm('description', e.target.value)}
-          placeholder="Décrivez votre annonce (min. 50 caractères)…"
-          rows={5}
+          onChange={(e) => updateForm("description", e.target.value)}
+          rows={4}
+          maxLength={1000}
+          placeholder="Décrivez l'animal, son caractère, ses habitudes..."
           className="w-full px-4 py-3 rounded-2xl border text-sm outline-none resize-none"
           style={{
-            background: 'var(--pc-surface-alt)',
-            borderColor: charCount >= 50 ? 'var(--pc-primary)' : 'var(--pc-border)',
-            color: 'var(--pc-text-primary)',
+            background: "var(--pc-surface-alt)",
+            borderColor: "var(--pc-border)",
+            color: "var(--pc-text-primary)",
           }}
         />
-        <div className="flex justify-between mt-1">
-          <span className="text-xs" style={{ color: charCount < 50 ? '#ef4444' : 'var(--pc-success)' }}>
-            {charCount < 50 ? `Encore ${50 - charCount} caractères` : 'Longueur OK ✓'}
-          </span>
-          <span className="text-xs" style={{ color: 'var(--pc-text-secondary)' }}>{charCount} car.</span>
-        </div>
+        <p
+          className="text-xs text-right mt-1"
+          style={{ color: "var(--pc-text-secondary)" }}
+        >
+          {charCount}/1000
+        </p>
       </div>
     </div>
   );
 }
 
-function ToggleField({
-  label,
-  value,
-  onChange,
+// ─── Step 3 — Photos avec upload réel ────────────────────────────────────────
+function Step3({
+  photos,
+  onPhotosChange,
 }: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
+  photos: string[];
+  onPhotosChange: (urls: string[]) => void;
 }) {
-  return (
-    <div className="flex-1 flex items-center justify-between glass-card rounded-2xl px-4 py-3">
-      <span className="text-sm font-medium" style={{ color: 'var(--pc-text-primary)' }}>{label}</span>
-      <button
-        onClick={() => onChange(!value)}
-        className="relative w-11 h-6 rounded-full flex-shrink-0"
-        style={{ background: value ? 'var(--pc-primary)' : 'var(--pc-border)' }}
-      >
-        <motion.div
-          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
-          animate={{ left: value ? '22px' : '2px' }}
-          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-        />
-      </button>
-    </div>
-  );
-}
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
 
-/* ─── Step 3: Photos ─── */
-function Step3({ fileInputRef }: { fileInputRef: React.RefObject<HTMLInputElement | null> }) {
+  const handleFiles = async (files: FileList) => {
+    setError("");
+    const MAX = 5;
+    const remaining = MAX - photos.length;
+    if (remaining <= 0) {
+      setError("Maximum 5 photos");
+      return;
+    }
+
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    try {
+      const urls = await Promise.all(
+        toUpload.map((f) => uploadApi.upload(f, "listings").then((r) => r.url)),
+      );
+      onPhotosChange([...photos, ...urls]);
+    } catch {
+      setError("Erreur lors du téléchargement. Réessayez.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removePhoto = (i: number) => {
+    onPhotosChange(photos.filter((_, idx) => idx !== i));
+  };
+
   return (
     <div>
-      <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-        Photos de l'animal
+      <h2
+        className="text-xl font-bold mb-1"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
+        Photos
       </h2>
-      <p className="text-sm mb-5" style={{ color: 'var(--pc-text-secondary)' }}>
-        De belles photos augmentent vos chances d'être contacté
+      <p className="text-sm mb-5" style={{ color: "var(--pc-text-secondary)" }}>
+        Ajoutez jusqu'à 5 photos (JPG, PNG, WebP · max 5 Mo chacune)
       </p>
 
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        className="w-full glass-card rounded-3xl border-2 border-dashed p-10 flex flex-col items-center gap-3 group"
-        style={{ borderColor: 'var(--pc-border)' }}
-      >
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform"
-          style={{ background: 'var(--pc-surface-alt)' }}
-        >
-          📷
+      {error && (
+        <div className="flex items-center gap-2 text-red-400 text-sm mb-3 bg-red-500/10 rounded-xl px-3 py-2">
+          <AlertCircle size={14} /> {error}
         </div>
-        <div className="text-center">
-          <p className="font-semibold" style={{ color: 'var(--pc-text-primary)' }}>
-            Glissez-déposez vos photos
-          </p>
-          <p className="text-sm mt-1" style={{ color: 'var(--pc-text-secondary)' }}>
-            ou{' '}
-            <span style={{ color: 'var(--pc-primary)' }} className="font-medium">
-              parcourir
-            </span>
-          </p>
-        </div>
-        <p className="text-xs" style={{ color: 'var(--pc-text-secondary)' }}>
-          Max 10 photos, 5 MB chacune
-        </p>
-      </button>
-      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" />
+      )}
 
-      <div className="grid grid-cols-3 gap-3 mt-5">
-        {[0, 1, 2].map(i => (
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {photos.map((url, i) => (
           <div
             key={i}
-            className="aspect-square rounded-2xl flex items-center justify-center border-2 border-dashed cursor-pointer"
-            style={{ background: 'var(--pc-surface-alt)', borderColor: 'var(--pc-border)' }}
+            className="relative aspect-square rounded-2xl overflow-hidden border-2 border-[var(--pc-primary)]"
           >
-            <span className="text-2xl" style={{ color: 'var(--pc-border)' }}>+</span>
+            <img
+              src={url}
+              alt={`Photo ${i + 1}`}
+              className="w-full h-full object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => removePhoto(i)}
+              className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center"
+            >
+              <X size={12} className="text-white" />
+            </button>
+            {i === 0 && (
+              <span className="absolute bottom-1 left-1 text-[10px] bg-[var(--pc-primary)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                Principale
+              </span>
+            )}
           </div>
         ))}
+
+        {photos.length < 5 && (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all hover:border-[var(--pc-primary)] disabled:opacity-50"
+            style={{
+              borderColor: "var(--pc-border)",
+              background: "var(--pc-surface-alt)",
+            }}
+          >
+            {uploading ? (
+              <Loader2
+                size={20}
+                className="animate-spin"
+                style={{ color: "var(--pc-primary)" }}
+              />
+            ) : (
+              <>
+                <Upload
+                  size={20}
+                  style={{ color: "var(--pc-text-secondary)" }}
+                />
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: "var(--pc-text-secondary)" }}
+                >
+                  Ajouter
+                </span>
+              </>
+            )}
+          </button>
+        )}
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="hidden"
+        onChange={(e) => e.target.files && handleFiles(e.target.files)}
+      />
+
+      <p
+        className="text-xs text-center"
+        style={{ color: "var(--pc-text-secondary)" }}
+      >
+        {photos.length}/5 photos ajoutées
+      </p>
     </div>
   );
 }
 
-/* ─── Step 4: Location ─── */
+// ─── Step 4 ───────────────────────────────────────────────────────────────────
 function Step4({
   form,
   updateForm,
@@ -575,220 +641,583 @@ function Step4({
   form: FormData;
   updateForm: (k: keyof FormData, v: string | boolean) => void;
 }) {
+  const user = useAuthStore((s) => s.user);
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold" style={{ color: 'var(--pc-text-primary)' }}>
-        Localisation &amp; contact
+      <h2
+        className="text-xl font-bold"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
+        Localisation & Contact
       </h2>
 
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-          Gouvernorat <span style={{ color: '#ef4444' }}>*</span>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
+          Gouvernorat <span style={{ color: "#ef4444" }}>*</span>
         </label>
         <div className="relative">
+          <MapPin
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--pc-text-secondary)" }}
+          />
           <select
             value={form.governorate}
-            onChange={e => updateForm('governorate', e.target.value)}
-            className="w-full px-4 py-3 rounded-2xl border text-sm outline-none appearance-none pr-8"
+            onChange={(e) => updateForm("governorate", e.target.value)}
+            className="w-full pl-9 pr-8 py-3 rounded-2xl border text-sm outline-none appearance-none"
             style={{
-              background: 'var(--pc-surface-alt)',
-              borderColor: form.governorate ? 'var(--pc-primary)' : 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
+              background: "var(--pc-surface-alt)",
+              borderColor: form.governorate
+                ? "var(--pc-primary)"
+                : "var(--pc-border)",
+              color: "var(--pc-text-primary)",
             }}
           >
-            <option value="">Choisir un gouvernorat…</option>
-            {GOVERNORATES.map(g => <option key={g} value={g}>{g}</option>)}
+            <option value="">Choisir…</option>
+            {GOVERNORATES.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
           </select>
-          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--pc-text-secondary)' }} />
+          <ChevronDown
+            size={14}
+            className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--pc-text-secondary)" }}
+          />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>Ville</label>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
+          Ville / Quartier
+        </label>
         <input
           type="text"
           value={form.city}
-          onChange={e => updateForm('city', e.target.value)}
-          placeholder="Ex: Tunis"
+          onChange={(e) => updateForm("city", e.target.value)}
+          placeholder="Ex: La Marsa, El Menzah..."
           className="w-full px-4 py-3 rounded-2xl border text-sm outline-none"
           style={{
-            background: 'var(--pc-surface-alt)',
-            borderColor: 'var(--pc-border)',
-            color: 'var(--pc-text-primary)',
+            background: "var(--pc-surface-alt)",
+            borderColor: "var(--pc-border)",
+            color: "var(--pc-text-primary)",
           }}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
           Téléphone de contact
         </label>
         <div className="relative">
-          <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--pc-text-secondary)' }} />
+          <Phone
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--pc-text-secondary)" }}
+          />
           <input
             type="tel"
             value={form.phone}
-            onChange={e => updateForm('phone', e.target.value)}
-            placeholder="+216 XX XXX XXX"
+            onChange={(e) => updateForm("phone", e.target.value)}
+            placeholder={user?.phone ?? "+216 XX XXX XXX"}
             className="w-full pl-9 pr-4 py-3 rounded-2xl border text-sm outline-none"
             style={{
-              background: 'var(--pc-surface-alt)',
-              borderColor: 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
+              background: "var(--pc-surface-alt)",
+              borderColor: "var(--pc-border)",
+              color: "var(--pc-text-primary)",
             }}
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--pc-text-primary)' }}>
+        <label
+          className="block text-sm font-medium mb-1"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
           Email de contact
         </label>
         <div className="relative">
-          <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--pc-text-secondary)' }} />
+          <Mail
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--pc-text-secondary)" }}
+          />
           <input
             type="email"
             value={form.email}
-            onChange={e => updateForm('email', e.target.value)}
-            placeholder="votre@email.com"
+            onChange={(e) => updateForm("email", e.target.value)}
+            placeholder={user?.email ?? "votre@email.com"}
             className="w-full pl-9 pr-4 py-3 rounded-2xl border text-sm outline-none"
             style={{
-              background: 'var(--pc-surface-alt)',
-              borderColor: 'var(--pc-border)',
-              color: 'var(--pc-text-primary)',
+              background: "var(--pc-surface-alt)",
+              borderColor: "var(--pc-border)",
+              color: "var(--pc-text-primary)",
             }}
           />
         </div>
-      </div>
-
-      <div
-        className="rounded-3xl flex flex-col items-center justify-center gap-2 py-10"
-        style={{ background: 'var(--pc-surface-alt)', border: '1px dashed var(--pc-border)' }}
-      >
-        <MapPin size={32} style={{ color: 'var(--pc-text-secondary)' }} />
-        <p className="text-sm font-medium" style={{ color: 'var(--pc-text-secondary)' }}>
-          Carte interactive — bientôt disponible
-        </p>
       </div>
     </div>
   );
 }
 
-/* ─── Step 5: Review ─── */
-function Step5({ form, onPublish }: { form: FormData; onPublish: () => void }) {
-  const cat = CATEGORIES.find(c => c.id === form.category);
+// ─── Step 5 — Récapitulatif + Publication ─────────────────────────────────────
+function SummaryField({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      className="rounded-2xl p-3"
+      style={{ background: "var(--pc-surface-alt)" }}
+    >
+      <p className="text-xs" style={{ color: "var(--pc-text-secondary)" }}>
+        {label}
+      </p>
+      <p
+        className="text-sm font-semibold mt-0.5"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Step5({
+  form,
+  photos,
+  onPublish,
+  loading,
+  error,
+}: {
+  form: FormData;
+  photos: string[];
+  onPublish: () => void;
+  loading: boolean;
+  error?: string;
+}) {
+  const cat = CATEGORIES.find((c) => c.id === form.category);
   return (
     <div>
-      <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--pc-text-primary)' }}>
-        Récapitulatif de votre annonce
+      <h2
+        className="text-xl font-bold mb-1"
+        style={{ color: "var(--pc-text-primary)" }}
+      >
+        Récapitulatif
       </h2>
-      <p className="text-sm mb-5" style={{ color: 'var(--pc-text-secondary)' }}>
+      <p className="text-sm mb-5" style={{ color: "var(--pc-text-secondary)" }}>
         Vérifiez les informations avant de publier
       </p>
 
+      {photos.length > 0 && (
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          {photos.map((url, i) => (
+            <img
+              key={i}
+              src={url}
+              alt=""
+              className="w-20 h-16 object-cover rounded-xl flex-shrink-0"
+            />
+          ))}
+        </div>
+      )}
+
       <div className="glass-card rounded-3xl p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{cat?.icon ?? '📋'}</span>
+          <span className="text-2xl">{cat?.icon ?? "📋"}</span>
           <span
             className="text-sm font-semibold px-3 py-1 rounded-full"
-            style={{ background: 'var(--pc-surface-alt)', color: 'var(--pc-primary)' }}
+            style={{
+              background: "var(--pc-surface-alt)",
+              color: "var(--pc-primary)",
+            }}
           >
             {cat?.label ?? form.category}
           </span>
         </div>
-
         {form.title && (
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--pc-text-secondary)' }}>Titre</p>
-            <p className="font-bold text-lg" style={{ color: 'var(--pc-text-primary)' }}>{form.title}</p>
+            <p
+              className="text-xs font-medium uppercase tracking-wide mb-1"
+              style={{ color: "var(--pc-text-secondary)" }}
+            >
+              Titre
+            </p>
+            <p
+              className="font-bold text-lg"
+              style={{ color: "var(--pc-text-primary)" }}
+            >
+              {form.title}
+            </p>
           </div>
         )}
-
         <div className="grid grid-cols-2 gap-3">
           {form.species && <SummaryField label="Espèce" value={form.species} />}
           {form.breed && <SummaryField label="Race" value={form.breed} />}
-          {form.ageValue && <SummaryField label="Âge" value={`${form.ageValue} ${form.ageUnit}`} />}
+          {form.ageValue && (
+            <SummaryField
+              label="Âge"
+              value={`${form.ageValue} ${form.ageUnit}`}
+            />
+          )}
           {form.sex && <SummaryField label="Sexe" value={form.sex} />}
-          <SummaryField label="Prix" value={form.isFree ? 'Gratuit' : form.price ? `${form.price} DT` : 'Non renseigné'} />
-          <SummaryField label="Vacciné" value={form.vaccinated ? '✅ Oui' : '❌ Non'} />
-          <SummaryField label="Stérilisé" value={form.sterilized ? '✅ Oui' : '❌ Non'} />
-          {form.governorate && <SummaryField label="Gouvernorat" value={form.governorate} />}
+          <SummaryField
+            label="Prix"
+            value={
+              form.isFree ? "Gratuit" : form.price ? `${form.price} DT` : "N/A"
+            }
+          />
+          <SummaryField
+            label="Vacciné"
+            value={form.vaccinated ? "✅ Oui" : "❌ Non"}
+          />
+          <SummaryField
+            label="Stérilisé"
+            value={form.sterilized ? "✅ Oui" : "❌ Non"}
+          />
+          {form.governorate && (
+            <SummaryField label="Gouvernorat" value={form.governorate} />
+          )}
           {form.city && <SummaryField label="Ville" value={form.city} />}
         </div>
-
         {form.description && (
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--pc-text-secondary)' }}>Description</p>
-            <p className="text-sm" style={{ color: 'var(--pc-text-primary)' }}>{form.description}</p>
+            <p
+              className="text-xs font-medium uppercase tracking-wide mb-1"
+              style={{ color: "var(--pc-text-secondary)" }}
+            >
+              Description
+            </p>
+            <p
+              className="text-sm line-clamp-3"
+              style={{ color: "var(--pc-text-primary)" }}
+            >
+              {form.description}
+            </p>
           </div>
         )}
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 text-red-400 text-sm mt-3 bg-red-500/10 rounded-xl px-3 py-2">
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={onPublish}
-        className="w-full mt-5 py-4 rounded-2xl font-bold text-white text-base"
-        style={{ background: 'linear-gradient(135deg, var(--pc-primary), #2ecc8a)' }}
+        disabled={loading}
+        className="w-full mt-5 py-4 rounded-2xl font-bold text-white text-base flex items-center justify-center gap-2 disabled:opacity-60"
+        style={{
+          background: "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
+        }}
       >
-        Publier l'annonce 🚀
+        {loading ? (
+          <>
+            <Loader2 size={18} className="animate-spin" /> Publication...
+          </>
+        ) : (
+          "Publier l'annonce 🚀"
+        )}
       </motion.button>
     </div>
   );
 }
 
-function SummaryField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl p-3" style={{ background: 'var(--pc-surface-alt)' }}>
-      <p className="text-xs" style={{ color: 'var(--pc-text-secondary)' }}>{label}</p>
-      <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--pc-text-primary)' }}>{value}</p>
-    </div>
-  );
-}
-
-/* ─── Success State ─── */
-function SuccessState({ onView, onAnother }: { onView: () => void; onAnother: () => void }) {
+// ─── Success ──────────────────────────────────────────────────────────────────
+function SuccessState({
+  onView,
+  onAnother,
+}: {
+  onView: () => void;
+  onAnother: () => void;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className="flex flex-col items-center text-center py-12 gap-5"
     >
       <div className="text-6xl">✨🎉✨</div>
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center"
-        style={{ background: 'linear-gradient(135deg, var(--pc-primary), #2ecc8a)' }}
+        style={{
+          background: "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
+        }}
       >
-        <Check size={40} className="text-white" strokeWidth={3} />
+        <Check size={36} className="text-white" strokeWidth={3} />
       </div>
       <div>
-        <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--pc-text-primary)' }}>
+        <h2
+          className="text-2xl font-black"
+          style={{ color: "var(--pc-text-primary)" }}
+        >
           Annonce publiée !
         </h2>
-        <p className="text-sm" style={{ color: 'var(--pc-text-secondary)' }}>
-          Votre annonce est maintenant visible par tous les utilisateurs de PetConnect.
+        <p
+          className="text-sm mt-2"
+          style={{ color: "var(--pc-text-secondary)" }}
+        >
+          Votre annonce est maintenant visible par tous les utilisateurs
         </p>
       </div>
-      <div className="flex flex-col gap-3 w-full max-w-xs mt-2">
+      <div className="flex flex-col gap-3 w-full max-w-xs">
         <button
+          type="button"
           onClick={onView}
-          className="py-3 rounded-2xl font-semibold text-white"
-          style={{ background: 'linear-gradient(135deg, var(--pc-primary), #2ecc8a)' }}
+          className="py-3 rounded-2xl font-bold text-white"
+          style={{
+            background: "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
+          }}
         >
-          Voir l'annonce
+          Voir mes annonces
         </button>
         <button
+          type="button"
           onClick={onAnother}
           className="py-3 rounded-2xl font-semibold border"
           style={{
-            borderColor: 'var(--pc-border)',
-            color: 'var(--pc-text-secondary)',
-            background: 'transparent',
+            color: "var(--pc-text-secondary)",
+            borderColor: "var(--pc-border)",
           }}
         >
-          Créer une autre annonce
+          Publier une autre annonce
         </button>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export function CreateListingPage({
+  onBack,
+  onSuccess,
+}: CreateListingPageProps) {
+  const { i18n } = useTranslation();
+  const isRtl = i18n.language === "ar";
+
+  const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState(1);
+  const [form, setForm] = useState<FormData>(initialForm);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [published, setPublished] = useState(false);
+  const [publishError, setPublishError] = useState("");
+
+  const createListing = useCreateListing();
+
+  const updateForm = (key: keyof FormData, value: string | boolean) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const canGoNext = (): boolean => {
+    if (step === 1) return !!form.category;
+    if (step === 2) return !!(form.title && form.species);
+    if (step === 4) return !!form.governorate;
+    return true;
+  };
+
+  const goNext = () => {
+    if (!canGoNext()) return;
+    setDirection(1);
+    setStep((s) => Math.min(s + 1, 5));
+  };
+
+  const goPrev = () => {
+    setDirection(-1);
+    if (step === 1) {
+      onBack();
+      return;
+    }
+    setStep((s) => s - 1);
+  };
+
+  const handlePublish = async () => {
+    setPublishError("");
+    try {
+      const ageInMonths = form.ageValue
+        ? form.ageUnit === "ans"
+          ? parseInt(form.ageValue) * 12
+          : parseInt(form.ageValue)
+        : undefined;
+
+      await createListing.mutateAsync({
+        title: form.title,
+        type: form.category as any,
+        species: form.species || undefined,
+        breed: form.breed || undefined,
+        price: form.isFree
+          ? undefined
+          : form.price
+            ? parseFloat(form.price)
+            : undefined,
+        is_free: form.isFree,
+        is_vaccinated: form.vaccinated,
+        is_sterilized: form.sterilized,
+        description: form.description || undefined,
+        region: form.governorate || undefined,
+        city: form.city || undefined,
+        contact_phone: form.phone || undefined,
+        contact_email: form.email || undefined,
+        photos: photos.length > 0 ? photos : undefined,
+      } as any);
+
+      setPublished(true);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        "Erreur lors de la publication. Vérifiez que vous êtes connecté.";
+      setPublishError(msg);
+    }
+  };
+
+  if (published) {
+    return (
+      <div
+        className="min-h-screen flex flex-col"
+        style={{ background: "var(--pc-surface)" }}
+      >
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md">
+            <SuccessState
+              onView={onSuccess}
+              onAnother={() => {
+                setForm(initialForm);
+                setPhotos([]);
+                setStep(1);
+                setPublished(false);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const slideVariants = {
+    enter: (d: number) => ({ opacity: 0, x: d * 32 }),
+    center: { opacity: 1, x: 0 },
+    exit: (d: number) => ({ opacity: 0, x: d * -32 }),
+  };
+
+  return (
+    <div
+      dir={isRtl ? "rtl" : "ltr"}
+      className="min-h-screen flex flex-col"
+      style={{ background: "var(--pc-surface)" }}
+    >
+      {/* Header */}
+      <div
+        className="sticky top-0 z-30 px-4 py-4 flex items-center gap-4"
+        style={{
+          background: "var(--pc-surface)",
+          borderBottom: "1px solid var(--pc-border)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={goPrev}
+          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[var(--pc-surface-alt)] transition-colors"
+        >
+          <ArrowLeft size={20} style={{ color: "var(--pc-text-primary)" }} />
+        </button>
+        <div className="flex-1">
+          <p
+            className="text-xs font-medium"
+            style={{ color: "var(--pc-text-secondary)" }}
+          >
+            Étape {step}/{STEP_LABELS.length}
+          </p>
+          <p
+            className="text-sm font-bold"
+            style={{ color: "var(--pc-text-primary)" }}
+          >
+            {STEP_LABELS[step - 1]}
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {STEP_LABELS.map((_, i) => (
+            <div
+              key={i}
+              className="h-1.5 rounded-full transition-all duration-300"
+              style={{
+                width: i + 1 === step ? 24 : 8,
+                background:
+                  i + 1 <= step ? "var(--pc-primary)" : "var(--pc-border)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="max-w-lg mx-auto">
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              {step === 1 && <Step1 form={form} updateForm={updateForm} />}
+              {step === 2 && <Step2 form={form} updateForm={updateForm} />}
+              {step === 3 && (
+                <Step3 photos={photos} onPhotosChange={setPhotos} />
+              )}
+              {step === 4 && <Step4 form={form} updateForm={updateForm} />}
+              {step === 5 && (
+                <Step5
+                  form={form}
+                  photos={photos}
+                  onPublish={handlePublish}
+                  loading={createListing.isPending}
+                  error={publishError}
+                />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Footer nav */}
+      {step < 5 && (
+        <div
+          className="sticky bottom-0 px-4 py-4"
+          style={{
+            background: "var(--pc-surface)",
+            borderTop: "1px solid var(--pc-border)",
+          }}
+        >
+          <div className="max-w-lg mx-auto">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.97 }}
+              onClick={goNext}
+              disabled={!canGoNext()}
+              className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
+              }}
+            >
+              {step === 3 ? "Continuer" : "Suivant"}
+              <ArrowRight size={18} />
+            </motion.button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
