@@ -28,8 +28,11 @@ export function useCreateListing() {
   return useMutation({
     mutationFn: listingsApi.create,
     onSuccess: () => {
+      // Invalide TOUTES les queries listings
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["search"] });
     },
   });
 }

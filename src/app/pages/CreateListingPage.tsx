@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1015,6 +1016,8 @@ export function CreateListingPage({
 
   const createListing = useCreateListing();
 
+  const queryClient = useQueryClient();
+
   const updateForm = (key: keyof FormData, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -1071,6 +1074,9 @@ export function CreateListingPage({
       } as any);
 
       setPublished(true);
+      queryClient.invalidateQueries({ queryKey: ["listings"] });
+      queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||

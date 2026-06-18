@@ -3,89 +3,87 @@ interface PetBadgeProps {
   className?: string;
 }
 
-const badgeConfig = {
+const badgeConfig: Record<
+  string,
+  {
+    label: string;
+    bg: string;
+    text: string;
+    dot: string;
+  }
+> = {
   vente: {
     label: "Vente",
     bg: "bg-emerald-100 dark:bg-emerald-900/40",
     text: "text-emerald-700 dark:text-emerald-300",
     dot: "bg-emerald-500",
   },
-
   adoption: {
     label: "Adoption",
     bg: "bg-blue-100 dark:bg-blue-900/40",
     text: "text-blue-700 dark:text-blue-300",
     dot: "bg-blue-500",
   },
-
   perdu: {
     label: "Perdu",
     bg: "bg-red-100 dark:bg-red-900/40",
     text: "text-red-700 dark:text-red-300",
     dot: "bg-red-500",
   },
-
   trouve: {
     label: "Trouvé",
     bg: "bg-amber-100 dark:bg-amber-900/40",
     text: "text-amber-700 dark:text-amber-300",
     dot: "bg-amber-500",
   },
-
   accouplement: {
     label: "Accouplement",
     bg: "bg-purple-100 dark:bg-purple-900/40",
     text: "text-purple-700 dark:text-purple-300",
     dot: "bg-purple-500",
   },
-
   conseils: {
     label: "Conseils",
-    bg: "bg-cyan-100 dark:bg-cyan-900/40",
-    text: "text-cyan-700 dark:text-cyan-300",
-    dot: "bg-cyan-500",
+    bg: "bg-teal-100 dark:bg-teal-900/40",
+    text: "text-teal-700 dark:text-teal-300",
+    dot: "bg-teal-500",
   },
-
   premium: {
-    label: "Premium",
+    label: "⭐ Premium",
     bg: "bg-amber-100 dark:bg-amber-900/40",
     text: "text-amber-700 dark:text-amber-300",
     dot: "bg-amber-500",
   },
-
   verified: {
-    label: "Vérifié",
+    label: "✓ Vérifié",
     bg: "bg-emerald-100 dark:bg-emerald-900/40",
     text: "text-emerald-700 dark:text-emerald-300",
     dot: "bg-emerald-500",
   },
-
   urgent: {
-    label: "Urgent",
+    label: "🔴 Urgent",
     bg: "bg-red-100 dark:bg-red-900/40",
     text: "text-red-700 dark:text-red-300",
     dot: "bg-red-500",
   },
-
   gratuit: {
     label: "Gratuit",
     bg: "bg-purple-100 dark:bg-purple-900/40",
     text: "text-purple-700 dark:text-purple-300",
     dot: "bg-purple-500",
   },
+};
 
-  default: {
-    label: "Annonce",
-    bg: "bg-gray-100 dark:bg-gray-900/40",
-    text: "text-gray-700 dark:text-gray-300",
-    dot: "bg-gray-500",
-  },
+// Config par défaut si le type est inconnu
+const DEFAULT_CONFIG = {
+  label: "Annonce",
+  bg: "bg-gray-100 dark:bg-gray-800",
+  text: "text-gray-700 dark:text-gray-300",
+  dot: "bg-gray-500",
 };
 
 export function PetBadge({ type, className = "" }: PetBadgeProps) {
-  const cfg =
-    badgeConfig[type as keyof typeof badgeConfig] ?? badgeConfig.default;
-
+  const cfg = badgeConfig[type] ?? DEFAULT_CONFIG;
   return (
     <span
       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${cfg.bg} ${cfg.text} ${className}`}
