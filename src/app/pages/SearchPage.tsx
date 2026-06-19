@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -11,37 +11,14 @@ import {
   ChevronDown,
   CheckSquare,
   Square,
+  Loader2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useSearch } from "../../hooks/useSearch";
+import type { ActiveFilters } from "../../hooks/useSearch";
+import type { Listing } from "../../types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-interface SearchResult {
-  id: string;
-  type: "vente" | "adoption" | "perdu" | "trouve";
-  title: string;
-  breed: string;
-  species: string;
-  price: number;
-  city: string;
-  governorate: string;
-  image: string;
-  age: string;
-  sex: string;
-  vaccinated: boolean;
-  verified: boolean;
-  postedAgo: string;
-  views: number;
-}
-
-interface ActiveFilters {
-  species: string[];
-  type: string[];
-  minPrice: string;
-  maxPrice: string;
-  city: string;
-  vaccinated: boolean;
-  adoptable: boolean;
-}
 
 interface SearchPageProps {
   onBack: () => void;
@@ -49,117 +26,7 @@ interface SearchPageProps {
   initialQuery?: string;
 }
 
-// ── Mock data ──────────────────────────────────────────────────────────────
-const MOCK_RESULTS: SearchResult[] = [
-  {
-    id: "r1",
-    type: "vente",
-    title: "Max - Berger Allemand",
-    breed: "Berger Allemand",
-    species: "Chien",
-    price: 850,
-    city: "Tunis",
-    governorate: "Tunis",
-    image:
-      "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&h=300&fit=crop",
-    age: "3 ans",
-    sex: "Mâle",
-    vaccinated: true,
-    verified: true,
-    postedAgo: "2h",
-    views: 1240,
-  },
-  {
-    id: "r2",
-    type: "adoption",
-    title: "Luna - Chatte tigrée",
-    breed: "Européen",
-    species: "Chat",
-    price: 0,
-    city: "Sfax",
-    governorate: "Sfax",
-    image:
-      "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=400&h=300&fit=crop",
-    age: "1 an",
-    sex: "Femelle",
-    vaccinated: true,
-    verified: false,
-    postedAgo: "5h",
-    views: 890,
-  },
-  {
-    id: "r3",
-    type: "vente",
-    title: "Perroquet Ara Bleu",
-    breed: "Ara bleu et jaune",
-    species: "Oiseau",
-    price: 1200,
-    city: "Sousse",
-    governorate: "Sousse",
-    image:
-      "https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=400&h=300&fit=crop",
-    age: "2 ans",
-    sex: "Mâle",
-    vaccinated: false,
-    verified: true,
-    postedAgo: "1j",
-    views: 567,
-  },
-  {
-    id: "r4",
-    type: "adoption",
-    title: "Nala - Labrador Mix",
-    breed: "Labrador",
-    species: "Chien",
-    price: 0,
-    city: "Tunis",
-    governorate: "Tunis",
-    image:
-      "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&h=300&fit=crop",
-    age: "2 ans",
-    sex: "Femelle",
-    vaccinated: true,
-    verified: true,
-    postedAgo: "3h",
-    views: 2100,
-  },
-  {
-    id: "r5",
-    type: "vente",
-    title: "Lapin Angora Blanc",
-    breed: "Angora",
-    species: "Lapin",
-    price: 120,
-    city: "Bizerte",
-    governorate: "Bizerte",
-    image:
-      "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400&h=300&fit=crop",
-    age: "8 mois",
-    sex: "Femelle",
-    vaccinated: false,
-    verified: false,
-    postedAgo: "6h",
-    views: 345,
-  },
-  {
-    id: "r6",
-    type: "perdu",
-    title: "Tobi - Spitz nain perdu",
-    breed: "Spitz nain",
-    species: "Chien",
-    price: 0,
-    city: "Ariana",
-    governorate: "Ariana",
-    image:
-      "https://images.unsplash.com/photo-1574144611937-0df059b5ef3e?w=400&h=300&fit=crop",
-    age: "4 ans",
-    sex: "Mâle",
-    vaccinated: true,
-    verified: false,
-    postedAgo: "8h",
-    views: 3200,
-  },
-];
+// ── Constants ──────────────────────────────────────────────────────────────
 
 const RECENT_SEARCHES = [
   "Berger Allemand",
@@ -168,7 +35,6 @@ const RECENT_SEARCHES = [
   "Perroquet",
 ];
 const GOVERNORATS = [
-  "",
   "Tunis",
   "Sfax",
   "Sousse",
@@ -178,6 +44,18 @@ const GOVERNORATS = [
   "Monastir",
   "Gafsa",
 ];
+const TYPES = ["vente", "adoption", "perdu", "trouve"];
+const SPECIES_LIST = ["Chien", "Chat", "Lapin", "Oiseau", "Reptile", "Autre"];
+
+const DEFAULT_FILTERS: ActiveFilters = {
+  species: [],
+  type: [],
+  minPrice: "",
+  maxPrice: "",
+  city: "",
+  vaccinated: false,
+  adoptable: false,
+};
 
 const TYPE_BADGE: Record<string, { label: string; bg: string; text: string }> =
   {
@@ -201,19 +79,46 @@ const TYPE_BADGE: Record<string, { label: string; bg: string; text: string }> =
       bg: "bg-amber-100 dark:bg-amber-900/40",
       text: "text-amber-700 dark:text-amber-300",
     },
+    accouplement: {
+      label: "Accouplement",
+      bg: "bg-purple-100 dark:bg-purple-900/40",
+      text: "text-purple-700 dark:text-purple-300",
+    },
+    conseils: {
+      label: "Conseils",
+      bg: "bg-teal-100 dark:bg-teal-900/40",
+      text: "text-teal-700 dark:text-teal-300",
+    },
   };
 
-const DEFAULT_FILTERS: ActiveFilters = {
-  species: [],
-  type: [],
-  minPrice: "",
-  maxPrice: "",
-  city: "",
-  vaccinated: false,
-  adoptable: false,
-};
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatPrice(listing: Listing): string {
+  if (listing.is_free) return "💚 Gratuit";
+  if (listing.price)
+    return `${Number(listing.price).toLocaleString("fr-TN")} DT`;
+  if (listing.type === "adoption") return "💚 Gratuit";
+  return "—";
+}
+
+function formatAge(months: number | null | undefined): string | null {
+  if (!months) return null;
+  if (months < 12) return `${months} mois`;
+  const y = Math.floor(months / 12);
+  return `${y} an${y > 1 ? "s" : ""}`;
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}min`;
+  const h = Math.floor(mins / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}j`;
+}
 
 // ── Filter Panel ────────────────────────────────────────────────────────────
+
 function FilterPanel({
   filters,
   onApply,
@@ -236,12 +141,8 @@ function FilterPanel({
     }));
   };
 
-  const TYPES = ["vente", "adoption", "perdu", "trouve"];
-  const SPECIES_LIST = ["Chien", "Chat", "Lapin", "Oiseau", "Reptile", "Autre"];
-
   return (
     <div className="flex flex-col gap-5 p-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h3
           className="font-bold text-[var(--pc-text-primary)]"
@@ -285,7 +186,7 @@ function FilterPanel({
         </div>
       </div>
 
-      {/* Species */}
+      {/* Espèce */}
       <div>
         <p
           className="font-semibold text-[var(--pc-text-primary)] mb-2.5"
@@ -364,7 +265,7 @@ function FilterPanel({
             style={{ fontSize: "13px" }}
           >
             <option value="">Tous les gouvernorats</option>
-            {GOVERNORATS.filter(Boolean).map((g) => (
+            {GOVERNORATS.map((g) => (
               <option key={g} value={g}>
                 {g}
               </option>
@@ -379,40 +280,30 @@ function FilterPanel({
 
       {/* Toggles */}
       <div className="flex flex-col gap-3">
-        <label className="flex items-center justify-between cursor-pointer">
-          <span
-            className="font-semibold text-[var(--pc-text-primary)]"
-            style={{ fontSize: "13px" }}
-          >
-            Vacciné uniquement
-          </span>
-          <button
-            onClick={() =>
-              setLocal((p) => ({ ...p, vaccinated: !p.vaccinated }))
-            }
-            className={`relative w-11 h-6 rounded-full transition-colors ${local.vaccinated ? "bg-[var(--pc-primary)]" : "bg-[var(--pc-border)]"}`}
+        {[
+          { key: "vaccinated" as const, label: "Vacciné uniquement" },
+          { key: "adoptable" as const, label: "Adoptable uniquement" },
+        ].map(({ key, label }) => (
+          <label
+            key={key}
+            className="flex items-center justify-between cursor-pointer"
           >
             <span
-              className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${local.vaccinated ? "translate-x-6" : "translate-x-1"}`}
-            />
-          </button>
-        </label>
-        <label className="flex items-center justify-between cursor-pointer">
-          <span
-            className="font-semibold text-[var(--pc-text-primary)]"
-            style={{ fontSize: "13px" }}
-          >
-            Adoptable uniquement
-          </span>
-          <button
-            onClick={() => setLocal((p) => ({ ...p, adoptable: !p.adoptable }))}
-            className={`relative w-11 h-6 rounded-full transition-colors ${local.adoptable ? "bg-[var(--pc-primary)]" : "bg-[var(--pc-border)]"}`}
-          >
-            <span
-              className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${local.adoptable ? "translate-x-6" : "translate-x-1"}`}
-            />
-          </button>
-        </label>
+              className="font-semibold text-[var(--pc-text-primary)]"
+              style={{ fontSize: "13px" }}
+            >
+              {label}
+            </span>
+            <button
+              onClick={() => setLocal((p) => ({ ...p, [key]: !p[key] }))}
+              className={`relative w-11 h-6 rounded-full transition-colors ${local[key] ? "bg-[var(--pc-primary)]" : "bg-[var(--pc-border)]"}`}
+            >
+              <span
+                className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${local[key] ? "translate-x-6" : "translate-x-1"}`}
+              />
+            </button>
+          </label>
+        ))}
       </div>
 
       {/* Actions */}
@@ -432,7 +323,7 @@ function FilterPanel({
             onApply(local);
             onClose?.();
           }}
-          className="flex-1 py-2.5 rounded-xl bg-[var(--pc-primary)] text-white font-bold shadow-lg shadow-[var(--pc-primary)]/25 hover:opacity-90 transition-opacity"
+          className="flex-1 py-2.5 rounded-xl bg-[var(--pc-primary)] text-white font-bold"
           style={{ fontSize: "13px" }}
         >
           Appliquer
@@ -443,14 +334,19 @@ function FilterPanel({
 }
 
 // ── Result Card ────────────────────────────────────────────────────────────
+
 function ResultCard({
-  result,
+  listing,
   onClick,
 }: {
-  result: SearchResult;
+  listing: Listing;
   onClick: () => void;
 }) {
-  const badge = TYPE_BADGE[result.type];
+  const badge = TYPE_BADGE[listing.type] ?? TYPE_BADGE.vente;
+  const image =
+    listing.photos?.[0] ?? `https://picsum.photos/seed/${listing.id}/400/225`;
+  const age = formatAge(listing.age_months);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -464,17 +360,16 @@ function ResultCard({
       {/* Image */}
       <div className="relative overflow-hidden" style={{ aspectRatio: "16/9" }}>
         <img
-          src={result.image}
-          alt={result.title}
+          src={image}
+          alt={listing.title ?? ""}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           onError={(e) => {
             (e.target as HTMLImageElement).src =
-              `https://picsum.photos/seed/${result.id}/400/225`;
+              `https://picsum.photos/seed/${listing.id}/400/225`;
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
-        {/* Type badge */}
         <span
           className={`absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${badge.bg} ${badge.text}`}
         >
@@ -482,18 +377,17 @@ function ResultCard({
           {badge.label}
         </span>
 
-        {result.verified && (
+        {listing.user?.is_verified && (
           <div className="absolute top-2 right-2 flex items-center gap-1 bg-[var(--pc-primary)] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">
             <Shield size={8} /> Vérifié
           </div>
         )}
 
-        {/* Views */}
         <div
           className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white px-2 py-0.5 rounded-full"
           style={{ fontSize: "10px" }}
         >
-          <Eye size={9} /> {result.views.toLocaleString()}
+          <Eye size={9} /> {(listing.views_count ?? 0).toLocaleString()}
         </div>
       </div>
 
@@ -503,35 +397,38 @@ function ResultCard({
           className="font-bold text-[var(--pc-text-primary)] truncate mb-0.5"
           style={{ fontFamily: "Sora, sans-serif", fontSize: "13px" }}
         >
-          {result.title}
+          {listing.title}
         </p>
         <p
           className="text-[var(--pc-text-secondary)] truncate mb-2"
           style={{ fontSize: "11px" }}
         >
-          {result.breed}
+          {listing.breed ?? listing.species ?? "—"}
         </p>
 
-        {/* Pills */}
         <div className="flex flex-wrap gap-1 mb-2">
-          <span
-            className="bg-[var(--pc-surface-alt)] text-[var(--pc-text-secondary)] px-1.5 py-0.5 rounded-md"
-            style={{ fontSize: "10px" }}
-          >
-            {result.age}
-          </span>
-          <span
-            className="bg-[var(--pc-surface-alt)] text-[var(--pc-text-secondary)] px-1.5 py-0.5 rounded-md"
-            style={{ fontSize: "10px" }}
-          >
-            {result.sex}
-          </span>
-          {result.vaccinated && (
+          {age && (
+            <span
+              className="bg-[var(--pc-surface-alt)] text-[var(--pc-text-secondary)] px-1.5 py-0.5 rounded-md"
+              style={{ fontSize: "10px" }}
+            >
+              {age}
+            </span>
+          )}
+          {listing.is_vaccinated && (
             <span
               className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded-md"
               style={{ fontSize: "10px" }}
             >
               💉 Vacciné
+            </span>
+          )}
+          {listing.created_at && (
+            <span
+              className="bg-[var(--pc-surface-alt)] text-[var(--pc-text-secondary)] px-1.5 py-0.5 rounded-md"
+              style={{ fontSize: "10px" }}
+            >
+              🕐 {timeAgo(listing.created_at)}
             </span>
           )}
         </div>
@@ -541,17 +438,13 @@ function ResultCard({
             className="flex items-center gap-1 text-[var(--pc-text-secondary)]"
             style={{ fontSize: "10px" }}
           >
-            <MapPin size={9} /> {result.city}
+            <MapPin size={9} /> {listing.city ?? "—"}
           </div>
           <span
             className="font-black text-[var(--pc-primary)]"
             style={{ fontFamily: "Sora, sans-serif", fontSize: "13px" }}
           >
-            {result.price > 0
-              ? `${result.price} DT`
-              : result.type === "adoption"
-                ? "💚 Gratuit"
-                : "Gratuit"}
+            {formatPrice(listing)}
           </span>
         </div>
       </div>
@@ -560,6 +453,7 @@ function ResultCard({
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
+
 export function SearchPage({
   onBack,
   onNavigate,
@@ -568,12 +462,20 @@ export function SearchPage({
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
 
-  const [query, setQuery] = useState(initialQuery);
-  const [activeFilters, setActiveFilters] =
-    useState<ActiveFilters>(DEFAULT_FILTERS);
-  const [sortBy, setSortBy] = useState<
-    "newest" | "oldest" | "priceAsc" | "priceDesc"
-  >("newest");
+  const {
+    query,
+    setQuery,
+    activeFilters,
+    setFilters: setActiveFilters,
+    sortBy,
+    setSortBy,
+    results,
+    total,
+    isLoading,
+    isFetching,
+    clearFilters,
+  } = useSearch(initialQuery);
+
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -581,56 +483,12 @@ export function SearchPage({
     inputRef.current?.focus();
   }, []);
 
-  const getFilteredResults = useCallback(() => {
-    let r = [...MOCK_RESULTS];
-
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      r = r.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.breed.toLowerCase().includes(q) ||
-          item.species.toLowerCase().includes(q),
-      );
-    }
-
-    if (activeFilters.type.length)
-      r = r.filter((item) => activeFilters.type.includes(item.type));
-    if (activeFilters.species.length)
-      r = r.filter((item) => activeFilters.species.includes(item.species));
-    if (activeFilters.city)
-      r = r.filter(
-        (item) =>
-          item.city === activeFilters.city ||
-          item.governorate === activeFilters.city,
-      );
-    if (activeFilters.vaccinated) r = r.filter((item) => item.vaccinated);
-    if (activeFilters.adoptable)
-      r = r.filter((item) => item.type === "adoption");
-    if (activeFilters.minPrice)
-      r = r.filter((item) => item.price >= parseInt(activeFilters.minPrice));
-    if (activeFilters.maxPrice)
-      r = r.filter((item) => item.price <= parseInt(activeFilters.maxPrice));
-
-    if (sortBy === "newest")
-      r.sort((a, b) => a.postedAgo.localeCompare(b.postedAgo));
-    if (sortBy === "oldest")
-      r.sort((a, b) => b.postedAgo.localeCompare(a.postedAgo));
-    if (sortBy === "priceAsc") r.sort((a, b) => a.price - b.price);
-    if (sortBy === "priceDesc") r.sort((a, b) => b.price - a.price);
-
-    return r;
-  }, [query, activeFilters, sortBy]);
-
-  const filteredResults = getFilteredResults();
   const hasActiveFilters =
     activeFilters.type.length > 0 ||
     activeFilters.species.length > 0 ||
-    activeFilters.city ||
+    !!activeFilters.city ||
     activeFilters.vaccinated ||
     activeFilters.adoptable;
-
-  const handleClear = () => setActiveFilters(DEFAULT_FILTERS);
 
   return (
     <div
@@ -641,7 +499,7 @@ export function SearchPage({
         <FilterPanel
           filters={activeFilters}
           onApply={setActiveFilters}
-          onClear={handleClear}
+          onClear={clearFilters}
         />
       </aside>
 
@@ -663,14 +521,20 @@ export function SearchPage({
               />
             </motion.button>
 
-            {/* Search Input */}
             <div
               className={`flex-1 flex items-center gap-2 bg-[var(--pc-surface-alt)] dark:bg-[#161B22] rounded-xl px-3 py-2.5 border border-[var(--pc-border)] focus-within:border-[var(--pc-primary)] transition-colors ${isRtl ? "flex-row-reverse" : ""}`}
             >
-              <Search
-                size={16}
-                className="text-[var(--pc-text-secondary)] flex-shrink-0"
-              />
+              {isFetching ? (
+                <Loader2
+                  size={16}
+                  className="text-[var(--pc-primary)] flex-shrink-0 animate-spin"
+                />
+              ) : (
+                <Search
+                  size={16}
+                  className="text-[var(--pc-text-secondary)] flex-shrink-0"
+                />
+              )}
               <input
                 ref={inputRef}
                 value={query}
@@ -687,7 +551,6 @@ export function SearchPage({
               )}
             </div>
 
-            {/* Mobile filter button */}
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowFilterDrawer(true)}
@@ -703,7 +566,7 @@ export function SearchPage({
             </motion.button>
           </div>
 
-          {/* Recent Searches */}
+          {/* Recent searches */}
           <AnimatePresence>
             {!query && (
               <motion.div
@@ -720,7 +583,7 @@ export function SearchPage({
                     <button
                       key={s}
                       onClick={() => setQuery(s)}
-                      className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[var(--pc-surface-alt)] rounded-full border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] hover:border-[var(--pc-primary)] transition-colors whitespace-nowrap ${isRtl ? "flex-row-reverse" : ""}`}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[var(--pc-surface-alt)] rounded-full border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] hover:border-[var(--pc-primary)] transition-colors whitespace-nowrap"
                       style={{ fontSize: "12px" }}
                     >
                       <span>🕐</span>
@@ -732,7 +595,7 @@ export function SearchPage({
             )}
           </AnimatePresence>
 
-          {/* Sort + count bar */}
+          {/* Sort + count */}
           <div
             className={`flex items-center justify-between mt-3 ${isRtl ? "flex-row-reverse" : ""}`}
           >
@@ -741,7 +604,7 @@ export function SearchPage({
               style={{ fontSize: "12px" }}
             >
               <span className="font-bold text-[var(--pc-text-primary)]">
-                {filteredResults.length}
+                {total}
               </span>{" "}
               résultats
             </p>
@@ -767,7 +630,17 @@ export function SearchPage({
 
         {/* Results Grid */}
         <main className="flex-1 p-4">
-          {filteredResults.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-[3/4] rounded-2xl animate-pulse"
+                  style={{ background: "var(--pc-surface)" }}
+                />
+              ))}
+            </div>
+          ) : results.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -787,8 +660,8 @@ export function SearchPage({
                 Essayez d'autres mots-clés ou modifiez vos filtres
               </p>
               <button
-                onClick={handleClear}
-                className="mt-4 px-4 py-2 bg-[var(--pc-primary)] text-white rounded-xl font-semibold hover:opacity-90 transition-opacity"
+                onClick={clearFilters}
+                className="mt-4 px-4 py-2 bg-[var(--pc-primary)] text-white rounded-xl font-semibold"
                 style={{ fontSize: "13px" }}
               >
                 Effacer les filtres
@@ -796,11 +669,13 @@ export function SearchPage({
             </motion.div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {filteredResults.map((r) => (
+              {results.map((listing) => (
                 <ResultCard
-                  key={r.id}
-                  result={r}
-                  onClick={() => onNavigate("pet-detail", { id: r.id })}
+                  key={listing.id}
+                  listing={listing as any}
+                  onClick={() =>
+                    onNavigate("pet-detail", { id: String(listing.id) })
+                  }
                 />
               ))}
             </div>
@@ -836,7 +711,7 @@ export function SearchPage({
                   setActiveFilters(f);
                   setShowFilterDrawer(false);
                 }}
-                onClear={handleClear}
+                onClear={clearFilters}
                 onClose={() => setShowFilterDrawer(false)}
               />
             </motion.div>

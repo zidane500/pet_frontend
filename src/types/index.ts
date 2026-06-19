@@ -23,6 +23,7 @@ export interface Listing {
   type: "adoption" | "vente" | "perdu" | "trouve" | "accouplement" | "conseils";
   species?: string;
   breed?: string;
+  age_months?: number | null;
   price?: number;
   is_free: boolean;
   city?: string;
