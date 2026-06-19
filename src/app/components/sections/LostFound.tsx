@@ -114,16 +114,22 @@ function CardSkeleton() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function LostFound() {
+export function LostFound({
+  onNavigate,
+}: {
+  onNavigate?: (page: string, params?: Record<string, string>) => void;
+} = {}) {
   const { t } = useTranslation();
 
   const { data: lostData, isLoading: lostLoading } = useLostFound({
     type: "lost",
     page: 1,
+    per_page: 2,
   });
   const { data: foundData, isLoading: foundLoading } = useLostFound({
     type: "found",
     page: 1,
+    per_page: 2,
   });
 
   const lostItems = lostData?.data?.slice(0, 2) ?? [];
@@ -218,6 +224,7 @@ export function LostFound() {
             </div>
 
             <button
+              onClick={() => onNavigate?.("search", { type: "perdu" })}
               className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-red-400 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 active:scale-95 transition-all touch-manipulation"
               style={{ fontSize: "14px" }}
             >
@@ -291,6 +298,7 @@ export function LostFound() {
             </div>
 
             <button
+              onClick={() => onNavigate?.("search", { type: "trouve" })}
               className="w-full mt-4 flex items-center justify-center gap-2 border-2 border-green-400 text-green-600 font-bold py-3 rounded-xl hover:bg-green-50 active:scale-95 transition-all touch-manipulation"
               style={{ fontSize: "14px" }}
             >

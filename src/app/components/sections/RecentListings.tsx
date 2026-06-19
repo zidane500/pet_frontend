@@ -10,7 +10,7 @@ export function RecentListings({
   onNavigate?: (page: string, params?: Record<string, string>) => void;
 } = {}) {
   const { t } = useTranslation();
-  const { data, isLoading } = useListings({ page: 1 });
+  const { data, isLoading } = useListings({ page: 1, per_page: 6 });
   const listings = data?.data ?? [];
   return (
     <section className="py-16 bg-[var(--pc-surface-alt)] dark:bg-[#060C12] relative">
@@ -45,6 +45,7 @@ export function RecentListings({
           </motion.div>
 
           <motion.button
+            onClick={() => onNavigate?.("search")}
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
@@ -93,7 +94,14 @@ export function RecentListings({
             ))
           ) : listings.length > 0 ? (
             listings.map((listing: Listing, i: number) => (
-              <ListingCard key={listing.id} listing={listing} index={i} />
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                index={i}
+                onClick={() =>
+                  onNavigate?.("pet-detail", { id: String(listing.id) })
+                }
+              />
             ))
           ) : (
             <p className="text-[var(--pc-text-secondary)] text-sm py-8">

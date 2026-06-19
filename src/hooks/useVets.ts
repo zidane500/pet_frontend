@@ -1,14 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { vetsApi } from "../api/vets";
 
-export function useVets(filters?: {
+export interface VetFilters {
   city?: string;
   region?: string;
   search?: string;
-}) {
+  page?: number;
+  per_page?: number;
+}
+
+export function useVets(filters?: VetFilters) {
   return useQuery({
     queryKey: ["vets", filters],
     queryFn: () => vetsApi.getAll(filters),
+    staleTime: 1000 * 60 * 5,
   });
 }
 

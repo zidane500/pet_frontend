@@ -24,6 +24,7 @@ interface SearchPageProps {
   onBack: () => void;
   onNavigate: (page: string, params?: Record<string, string>) => void;
   initialQuery?: string;
+  initialType?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -95,17 +96,21 @@ const TYPE_BADGE: Record<string, { label: string; bg: string; text: string }> =
 
 function formatPrice(listing: Listing): string {
   if (listing.is_free) return "💚 Gratuit";
-  if (listing.price)
+  if (listing.price != null && listing.price !== "") {
     return `${Number(listing.price).toLocaleString("fr-TN")} DT`;
+  }
   if (listing.type === "adoption") return "💚 Gratuit";
   return "—";
 }
 
 function formatAge(months: number | null | undefined): string | null {
-  if (!months) return null;
+  if (months == null) return null;
   if (months < 12) return `${months} mois`;
   const y = Math.floor(months / 12);
-  return `${y} an${y > 1 ? "s" : ""}`;
+  const rest = months % 12;
+  return rest > 0
+    ? `${y} an${y > 1 ? "s" : ""} ${rest} mois`
+    : `${y} an${y > 1 ? "s" : ""}`;
 }
 
 function timeAgo(dateStr: string): string {
@@ -131,6 +136,10 @@ function FilterPanel({
   onClose?: () => void;
 }) {
   const [local, setLocal] = useState<ActiveFilters>(filters);
+
+  useEffect(() => {
+    setLocal(filters);
+  }, [filters]);
 
   const toggleArr = (key: "species" | "type", val: string) => {
     setLocal((prev) => ({
@@ -458,6 +467,7 @@ export function SearchPage({
   onBack,
   onNavigate,
   initialQuery = "",
+  initialType,
 }: SearchPageProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
@@ -471,10 +481,16 @@ export function SearchPage({
     setSortBy,
     results,
     total,
+    totalPages,
+    page,
+    setPage,
     isLoading,
     isFetching,
     clearFilters,
-  } = useSearch(initialQuery);
+  } = useSearch(
+    initialQuery,
+    initialType ? { type: [initialType] } : undefined,
+  );
 
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -488,7 +504,9 @@ export function SearchPage({
     activeFilters.species.length > 0 ||
     !!activeFilters.city ||
     activeFilters.vaccinated ||
-    activeFilters.adoptable;
+    activeFilters.adoptable ||
+    !!activeFilters.minPrice ||
+    !!activeFilters.maxPrice;
 
   return (
     <div
@@ -668,17 +686,46 @@ export function SearchPage({
               </button>
             </motion.div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-              {results.map((listing) => (
-                <ResultCard
-                  key={listing.id}
-                  listing={listing as any}
-                  onClick={() =>
-                    onNavigate("pet-detail", { id: String(listing.id) })
-                  }
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                {results.map((listing) => (
+                  <ResultCard
+                    key={listing.id}
+                    listing={listing}
+                    onClick={() =>
+                      onNavigate("pet-detail", { id: String(listing.id) })
+                    }
+                  />
+                ))}
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 mt-6">
+                  <button
+                    disabled={page <= 1 || isFetching}
+                    onClick={() => setPage(Math.max(1, page - 1))}
+                    className="px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ fontSize: "13px", fontWeight: 600 }}
+                  >
+                    Précédent
+                  </button>
+                  <span
+                    className="text-[var(--pc-text-secondary)]"
+                    style={{ fontSize: "13px" }}
+                  >
+                    Page {page} / {totalPages}
+                  </span>
+                  <button
+                    disabled={page >= totalPages || isFetching}
+                    onClick={() => setPage(Math.min(totalPages, page + 1))}
+                    className="px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ fontSize: "13px", fontWeight: 600 }}
+                  >
+                    Suivant
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>

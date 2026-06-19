@@ -1,9 +1,14 @@
 import client from "./client";
-import type { User, DashboardData } from "../types";
+import type {
+  AppNotification,
+  DashboardData,
+  PaginatedResponse,
+  User,
+} from "../types";
 
 export const userApi = {
   getProfile: async (id: number): Promise<User> => {
-    const res = await client.get(`/users/${id}`);
+    const res = await client.get(`/users/${encodeURIComponent(String(id))}`);
     return res.data;
   },
 
@@ -19,16 +24,20 @@ export const userApi = {
     return res.data;
   },
 
-  getNotifications: async () => {
+  getNotifications: async (): Promise<PaginatedResponse<AppNotification>> => {
     const res = await client.get("/notifications");
     return res.data;
   },
 
-  markNotificationRead: async (id: string) => {
-    await client.patch(`/notifications/${id}/read`);
+  markNotificationRead: async (id: string): Promise<void> => {
+    await client.patch(`/notifications/${encodeURIComponent(id)}/read`);
   },
 
-  markAllNotificationsRead: async () => {
+  markAllNotificationsRead: async (): Promise<void> => {
     await client.patch("/notifications/read-all");
+  },
+
+  deleteNotifications: async (): Promise<void> => {
+    await client.delete("/notifications");
   },
 };

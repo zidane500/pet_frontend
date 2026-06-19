@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { useDashboard, useMyListings } from "../../hooks/useDashboard";
+import {
+  useDashboard,
+  useDeleteListing,
+  useMyListings,
+  useUpdateListing,
+} from "../../hooks/useDashboard";
+import { useCreateListing } from "../../hooks/useListings";
 import { useAuthStore } from "../../store/authStore";
 import {
   AreaChart,
@@ -46,6 +52,7 @@ import {
 import { ConfirmModal } from "../components/ui/GlobalModals";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { LangSelector } from "../components/LangSelector";
+import type { DashboardData, Listing } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +89,7 @@ interface ListingItem {
   messages: number;
   status: ListingStatus;
   daysLeft: number;
+  source?: Listing;
 }
 
 interface NotificationItem {
@@ -372,6 +380,208 @@ function typeBadgeClass(type: string): string {
   }
 }
 
+interface DashboardStat {
+  label: string;
+  value: number;
+  icon: string;
+  color: string;
+  trend: number;
+}
+
+interface RecentActivityItem {
+  icon: string;
+  text: string;
+  time: string;
+}
+
+function toNumber(value: number | string | null | undefined): number {
+  if (value === null || value === undefined || value === "") return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatPriceFromListing(listing: Listing): string {
+  if (listing.is_free || listing.type === "adoption") return "Gratuit";
+  if (
+    listing.price === null ||
+    listing.price === undefined ||
+    listing.price === ""
+  )
+    return "—";
+  return `${toNumber(listing.price).toLocaleString("fr-TN")} DT`;
+}
+
+function getDaysLeft(expiresAt?: string | null): number {
+  if (!expiresAt) return 0;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(diff / 86_400_000));
+}
+
+function resolveListingStatus(listing: Listing): ListingStatus {
+  if (
+    listing.expires_at &&
+    new Date(listing.expires_at).getTime() < Date.now()
+  ) {
+    return "expired";
+  }
+
+  if (listing.status) return listing.status as ListingStatus;
+  return listing.is_active ? "active" : "paused";
+}
+
+function mapListingToItem(listing: Listing): ListingItem {
+  return {
+    id: String(listing.id),
+    title: listing.title,
+    type: listing.type,
+    price: formatPriceFromListing(listing),
+    city: listing.city ?? listing.region ?? "—",
+    image:
+      listing.photos?.[0] ??
+      `https://picsum.photos/seed/dashboard-${listing.id}/400/250`,
+    views: listing.views_count ?? 0,
+    favorites:
+      (listing as Listing & { favorites_count?: number }).favorites_count ?? 0,
+    messages:
+      (listing as Listing & { messages_count?: number }).messages_count ?? 0,
+    status: resolveListingStatus(listing),
+    daysLeft: getDaysLeft(listing.expires_at),
+    source: listing,
+  };
+}
+
+function userInitials(name?: string | null): string {
+  const parts = (name ?? "Utilisateur")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return parts.map((p) => p[0]?.toUpperCase()).join("") || "U";
+}
+
+function getProfileCompletion(
+  user: DashboardData["user"] | null | undefined,
+): number {
+  if (!user) return 0;
+
+  const fields = [
+    user.name,
+    user.email,
+    user.phone,
+    user.city,
+    user.region,
+    user.avatar,
+    user.bio,
+    user.is_verified,
+  ];
+
+  const completed = fields.filter(Boolean).length;
+  return Math.round((completed / fields.length) * 100);
+}
+
+function buildStats(dashboard?: DashboardData | null): DashboardStat[] {
+  return [
+    {
+      label: "Annonces actives",
+      value: dashboard?.active_listings ?? 0,
+      icon: "📋",
+      color: "emerald",
+      trend: 0,
+    },
+    {
+      label: "Vues totales",
+      value: dashboard?.total_views ?? 0,
+      icon: "👁️",
+      color: "blue",
+      trend: 0,
+    },
+    {
+      label: "Messages non lus",
+      value: dashboard?.unread_messages ?? 0,
+      icon: "💬",
+      color: "purple",
+      trend: 0,
+    },
+    {
+      label: "Total annonces",
+      value: dashboard?.listings_count ?? 0,
+      icon: "🐾",
+      color: "amber",
+      trend: 0,
+    },
+  ];
+}
+
+function buildViewsData(dashboard?: DashboardData | null) {
+  const data = dashboard?.views_by_listing ?? [];
+  if (data.length > 0) return data;
+  return [{ day: "Aucune", views: 0 }];
+}
+
+function buildMessagesData(dashboard?: DashboardData | null) {
+  const data = dashboard?.messages_by_day ?? [];
+  if (data.length > 0) return data;
+  return ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => ({
+    day,
+    count: 0,
+  }));
+}
+
+function timeAgoLabel(dateStr?: string | null): string {
+  if (!dateStr) return "—";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.max(0, Math.floor(diff / 60_000));
+  if (mins < 60) return `Il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Il y a ${hours}h`;
+  return `Il y a ${Math.floor(hours / 24)}j`;
+}
+
+function buildRecentActivity(
+  dashboard?: DashboardData | null,
+): RecentActivityItem[] {
+  const items: RecentActivityItem[] = [];
+
+  if ((dashboard?.unread_messages ?? 0) > 0) {
+    items.push({
+      icon: "💬",
+      text: `Vous avez ${dashboard?.unread_messages} message(s) non lu(s).`,
+      time: "Maintenant",
+    });
+  }
+
+  if ((dashboard?.total_views ?? 0) > 0) {
+    items.push({
+      icon: "👁️",
+      text: `Vos annonces ont reçu ${dashboard?.total_views.toLocaleString("fr-TN")} vue(s) au total.`,
+      time: "Aujourd'hui",
+    });
+  }
+
+  dashboard?.recent_listings?.slice(0, 3).forEach((listing) => {
+    items.push({
+      icon: "🐾",
+      text: `Annonce « ${listing.title} » publiée ou mise à jour.`,
+      time: timeAgoLabel(listing.created_at),
+    });
+  });
+
+  if (items.length === 0) {
+    items.push({
+      icon: "✨",
+      text: "Aucune activité récente pour le moment.",
+      time: "—",
+    });
+  }
+
+  return items.slice(0, 5);
+}
+
+function positiveBadge(value: number | undefined): number | undefined {
+  return value && value > 0 ? value : undefined;
+}
+
 const tabVariants = {
   initial: { opacity: 0, x: 20 },
   animate: {
@@ -408,7 +618,7 @@ function Toast({ message, show }: { message: string; show: boolean }) {
 
 // ─── Profile Ring ──────────────────────────────────────────────────────────────
 
-function ProfileRing({ pct }: { pct: number }) {
+function ProfileRing({ pct, initials }: { pct: number; initials: string }) {
   const r = 24;
   const c = 2 * Math.PI * r;
   const dash = (pct / 100) * c;
@@ -442,7 +652,7 @@ function ProfileRing({ pct }: { pct: number }) {
           margin: 6,
         }}
       >
-        AB
+        {initials}
       </div>
     </div>
   );
@@ -450,12 +660,45 @@ function ProfileRing({ pct }: { pct: number }) {
 
 // ─── Overview Tab ──────────────────────────────────────────────────────────────
 
-function OverviewTab({ onNavigate }: { onNavigate: (page: string) => void }) {
+function OverviewTab({
+  onNavigate,
+  stats,
+  areaData,
+  barData,
+  recentActivity,
+  isLoading,
+}: {
+  onNavigate: (page: string) => void;
+  stats: DashboardStat[];
+  areaData: { day: string; views?: number }[];
+  barData: { day: string; count?: number }[];
+  recentActivity: RecentActivityItem[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="glass-card rounded-2xl p-4 h-28 animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="glass-card rounded-2xl h-56 animate-pulse" />
+          <div className="glass-card rounded-2xl h-56 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {STATS.map((stat, i) => (
+        {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 12 }}
@@ -493,11 +736,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (page: string) => void }) {
         <div className="glass-card rounded-2xl p-5">
           <h3 className="font-semibold text-[var(--pc-text-primary)] mb-4 flex items-center gap-2 text-sm">
             <TrendingUp size={15} className="text-[var(--pc-primary)]" />
-            Vues des annonces (30 jours)
+            Vues par annonces récentes
           </h3>
           <ResponsiveContainer width="100%" height={160}>
             <AreaChart
-              data={AREA_DATA}
+              data={areaData}
               margin={{ top: 4, right: 4, left: -28, bottom: 0 }}
             >
               <defs>
@@ -560,7 +803,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (page: string) => void }) {
           </h3>
           <ResponsiveContainer width="100%" height={160}>
             <BarChart
-              data={BAR_DATA}
+              data={barData}
               margin={{ top: 4, right: 4, left: -28, bottom: 0 }}
             >
               <CartesianGrid
@@ -606,7 +849,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (page: string) => void }) {
           Activité récente
         </h2>
         <div className="space-y-0">
-          {RECENT_ACTIVITY.map((item, i) => (
+          {recentActivity.map((item, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, x: -12 }}
@@ -714,17 +957,29 @@ const MODAL_CONFIG: Record<
 
 function MyListingsTab({
   onNavigate,
+  listings,
+  isLoading,
 }: {
   onNavigate: (page: string, params?: Record<string, string>) => void;
+  listings: Listing[];
+  isLoading: boolean;
 }) {
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [listings, setListings] = useState<ListingItem[]>(MOCK_LISTINGS_BASE);
   const [modal, setModal] = useState<ModalState>({
     type: null,
     listingId: null,
     loading: false,
   });
   const [toast, setToast] = useState({ show: false, message: "" });
+
+  const deleteListing = useDeleteListing();
+  const updateListing = useUpdateListing();
+  const createListing = useCreateListing();
+
+  const listingItems = useMemo(
+    () => listings.map(mapListingToItem),
+    [listings],
+  );
 
   const showToast = (message: string) => {
     setToast({ show: true, message });
@@ -738,40 +993,53 @@ function MyListingsTab({
   const closeModal = () =>
     setModal({ type: null, listingId: null, loading: false });
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!modal.listingId || !modal.type) return;
     setModal((m) => ({ ...m, loading: true }));
 
-    setTimeout(() => {
-      const id = modal.listingId!;
-      const type = modal.type!;
+    const id = Number(modal.listingId);
+    const type = modal.type;
 
-      setListings((prev) => {
-        if (type === "delete") return prev.filter((l) => l.id !== id);
-        if (type === "pause")
-          return prev.map((l) =>
-            l.id === id ? { ...l, status: "paused" as ListingStatus } : l,
-          );
-        if (type === "resume")
-          return prev.map((l) =>
-            l.id === id ? { ...l, status: "active" as ListingStatus } : l,
-          );
-        if (type === "sold")
-          return prev.map((l) =>
-            l.id === id ? { ...l, status: "sold" as ListingStatus } : l,
-          );
-        if (type === "adopted")
-          return prev.map((l) =>
-            l.id === id ? { ...l, status: "adopted" as ListingStatus } : l,
-          );
-        if (type === "renew")
-          return prev.map((l) =>
-            l.id === id
-              ? { ...l, daysLeft: 30, status: "active" as ListingStatus }
-              : l,
-          );
-        return prev;
-      });
+    try {
+      if (type === "delete") {
+        await deleteListing.mutateAsync(id);
+      }
+
+      if (type === "pause") {
+        await updateListing.mutateAsync({
+          id,
+          data: { is_active: false, status: "paused" },
+        });
+      }
+
+      if (type === "resume") {
+        await updateListing.mutateAsync({
+          id,
+          data: { is_active: true, status: "active" },
+        });
+      }
+
+      if (type === "sold") {
+        await updateListing.mutateAsync({
+          id,
+          data: { is_active: false, status: "sold" },
+        });
+      }
+
+      if (type === "adopted") {
+        await updateListing.mutateAsync({
+          id,
+          data: { is_active: false, status: "adopted" },
+        });
+      }
+
+      if (type === "renew") {
+        const nextExpiry = new Date(Date.now() + 30 * 86_400_000).toISOString();
+        await updateListing.mutateAsync({
+          id,
+          data: { is_active: true, status: "active", expires_at: nextExpiry },
+        });
+      }
 
       const toastMessages: Record<string, string> = {
         delete: "Annonce supprimée",
@@ -783,22 +1051,38 @@ function MyListingsTab({
       };
       showToast(toastMessages[type] ?? "Action effectuée");
       closeModal();
-    }, 700);
+    } catch {
+      showToast("Action impossible. Vérifiez l'API ou votre connexion.");
+      setModal((m) => ({ ...m, loading: false }));
+    }
   };
 
-  const handleDuplicate = (listing: ListingItem) => {
-    const copy: ListingItem = {
-      ...listing,
-      id: `${listing.id}-copy-${Date.now()}`,
-      title: `${listing.title} (Copie)`,
-      status: "active",
-      views: 0,
-      favorites: 0,
-      messages: 0,
-      daysLeft: 30,
-    };
-    setListings((prev) => [copy, ...prev]);
-    showToast("Annonce dupliquée");
+  const handleDuplicate = async (listing: ListingItem) => {
+    if (!listing.source) return;
+
+    try {
+      const source = listing.source;
+      await createListing.mutateAsync({
+        title: `${source.title} (Copie)`,
+        description: source.description,
+        type: source.type,
+        species: source.species ?? undefined,
+        breed: source.breed ?? undefined,
+        age_months: source.age_months ?? undefined,
+        price: source.price ?? undefined,
+        is_free: source.is_free,
+        city: source.city ?? undefined,
+        region: source.region ?? undefined,
+        photos: source.photos ?? undefined,
+        contact_phone: source.contact_phone ?? undefined,
+        contact_email: source.contact_email ?? undefined,
+        is_vaccinated: source.is_vaccinated,
+        is_sterilized: source.is_sterilized,
+      });
+      showToast("Annonce dupliquée");
+    } catch {
+      showToast("Duplication impossible. Vérifiez les champs obligatoires.");
+    }
   };
 
   const filters: { key: FilterKey; label: string }[] = [
@@ -811,7 +1095,9 @@ function MyListingsTab({
   ];
 
   const visible =
-    filter === "all" ? listings : listings.filter((l) => l.status === filter);
+    filter === "all"
+      ? listingItems
+      : listingItems.filter((l) => l.status === filter);
 
   const currentModalCfg = modal.type ? MODAL_CONFIG[modal.type] : null;
 
@@ -837,7 +1123,7 @@ function MyListingsTab({
         <h2 className="font-semibold text-[var(--pc-text-primary)]">
           Mes annonces{" "}
           <span className="text-[var(--pc-text-secondary)] font-normal text-sm">
-            ({listings.length})
+            ({listingItems.length})
           </span>
         </h2>
         <motion.button
@@ -876,7 +1162,16 @@ function MyListingsTab({
       </div>
 
       {/* Grid */}
-      {visible.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="glass-card rounded-2xl h-72 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
         <div className="glass-card rounded-2xl p-12 flex flex-col items-center gap-3 text-center">
           <span className="text-4xl">📋</span>
           <p className="text-[var(--pc-text-secondary)] text-sm">
@@ -1650,16 +1945,22 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
 
   const [activeTab, setActiveTab] = useState<MainTab>("overview");
 
-  // Derived data from API (used when backend is ready)
-  const _apiListings = listingsData?.data ?? [];
-  const _apiStats = dashData ?? null;
-  // Suppress unused variable warnings until API is integrated
-  void _apiListings;
-  void _apiStats;
-  void dashLoading;
-  void listingsLoading;
+  const dashboardUser = dashData?.user ?? user;
+  const myListings = listingsData?.data ?? [];
+  const dashboardStats = useMemo(() => buildStats(dashData), [dashData]);
+  const viewsChartData = useMemo(() => buildViewsData(dashData), [dashData]);
+  const messagesChartData = useMemo(
+    () => buildMessagesData(dashData),
+    [dashData],
+  );
+  const recentActivity = useMemo(
+    () => buildRecentActivity(dashData),
+    [dashData],
+  );
+  const profilePct = getProfileCompletion(dashboardUser);
+  const initials = userInitials(dashboardUser?.name);
 
-  const displayName = user?.name ?? "Utilisateur";
+  const displayName = dashboardUser?.name ?? "Utilisateur";
 
   const NAV_TABS: NavTab[] = [
     {
@@ -1671,25 +1972,25 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
       key: "myListings",
       icon: <List size={18} />,
       label: "Mes annonces",
-      badge: 4,
+      badge: positiveBadge(dashData?.listings_count),
     },
     {
       key: "myFavorites",
       icon: <Heart size={18} />,
       label: "Favoris",
-      badge: 2,
+      badge: positiveBadge(dashData?.favorites_count),
     },
     {
       key: "messages",
       icon: <MessageCircle size={18} />,
       label: "Messages",
-      badge: 4,
+      badge: positiveBadge(dashData?.unread_messages),
     },
     {
       key: "notifications",
       icon: <Bell size={18} />,
       label: "Notifications",
-      badge: 3,
+      badge: positiveBadge(dashData?.unread_notifications),
     },
     { key: "settings", icon: <Settings size={18} />, label: "Paramètres" },
   ];
@@ -1712,28 +2013,31 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
         {/* Profile section */}
         <div className="p-5 border-b border-[var(--pc-border)]">
           <div className="flex items-start gap-3 mb-3">
-            <ProfileRing pct={75} />
+            <ProfileRing pct={profilePct} initials={initials} />
             <div className="flex-1 min-w-0 pt-1">
               <p className="font-bold text-[var(--pc-text-primary)] text-sm leading-tight">
                 {displayName}
               </p>
               <p className="text-xs text-[var(--pc-text-secondary)] truncate">
-                {user?.email ?? "ahmed@email.com"}
+                {dashboardUser?.email ?? "—"}
               </p>
               <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">
-                ✓ Vérifié
+                {dashboardUser?.is_verified ? "✓ Vérifié" : "Non vérifié"}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-[var(--pc-text-secondary)]">
-              Profil complété à 75%
+              Profil complété à {profilePct}%
             </span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-[var(--pc-border)] mt-2 overflow-hidden">
             <div
               className="h-full rounded-full"
-              style={{ width: "75%", background: "var(--pc-primary)" }}
+              style={{
+                width: `${profilePct}%`,
+                background: "var(--pc-primary)",
+              }}
             />
           </div>
           <button className="mt-2 text-xs text-[var(--pc-primary)] hover:underline font-medium">
@@ -1866,10 +2170,21 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
                 exit="exit"
               >
                 {activeTab === "overview" && (
-                  <OverviewTab onNavigate={onNavigate} />
+                  <OverviewTab
+                    onNavigate={onNavigate}
+                    stats={dashboardStats}
+                    areaData={viewsChartData}
+                    barData={messagesChartData}
+                    recentActivity={recentActivity}
+                    isLoading={dashLoading}
+                  />
                 )}
                 {activeTab === "myListings" && (
-                  <MyListingsTab onNavigate={onNavigate} />
+                  <MyListingsTab
+                    onNavigate={onNavigate}
+                    listings={myListings}
+                    isLoading={listingsLoading}
+                  />
                 )}
                 {activeTab === "myFavorites" && (
                   <MyFavoritesTab onNavigate={onNavigate} />

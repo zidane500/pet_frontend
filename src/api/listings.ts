@@ -9,7 +9,11 @@ export interface ListingFilters {
   search?: string;
   min_price?: number;
   max_price?: number;
+  is_vaccinated?: boolean;
+  adoptable?: boolean;
+  sort?: "newest" | "oldest" | "priceAsc" | "priceDesc";
   page?: number;
+  per_page?: number;
 }
 
 export const listingsApi = {

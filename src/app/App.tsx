@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { NavigationProvider, useNav } from "./context/NavigationContext";
 import { useAuth } from "../hooks/useAuth";
+import { useRealtimeUserChannel } from "../hooks/useRealtimeUserChannel";
 import { Navbar } from "./components/sections/Navbar";
 import { HeroSection } from "./components/sections/HeroSection";
 import { StatsBar } from "./components/sections/StatsBar";
@@ -42,6 +43,8 @@ function AppInner() {
   const { i18n } = useTranslation();
   const { nav, navigate, goBack } = useNav();
   const { user, isLoggedIn, login, register, logout } = useAuth();
+
+  useRealtimeUserChannel(isLoggedIn ? user?.id : null);
 
   useEffect(() => {
     const saved = localStorage.getItem("petconnect-theme");
@@ -90,10 +93,18 @@ function AppInner() {
     );
   }
 
-  const PAGES: Partial<Record<string, JSX.Element>> = {
+  const PAGES: Partial<Record<string, ReactElement>> = {
     feed: <FeedPage onBack={goBack} />,
     dashboard: <DashboardPage onBack={goBack} onNavigate={navigate} />,
-    messages: <MessagingPage onBack={goBack} />,
+    messages: (
+      <MessagingPage
+        onBack={goBack}
+        initialUserId={nav.params?.userId}
+        initialListingId={nav.params?.listingId}
+        initialPartnerName={nav.params?.partnerName}
+        initialPartnerAvatar={nav.params?.partnerAvatar}
+      />
+    ),
     "create-listing": (
       <CreateListingPage
         onBack={goBack}
@@ -112,6 +123,7 @@ function AppInner() {
         onBack={goBack}
         onNavigate={navigate}
         initialQuery={nav.params?.q}
+        initialType={nav.params?.type}
       />
     ),
     profile: (
@@ -170,10 +182,10 @@ function AppInner() {
           <StatsBar />
           <RecentListings onNavigate={navigate} />
           <AdoptionSpotlight onNavigate={navigate} />
-          <LostFound />
+          <LostFound onNavigate={navigate} />
           <HowItWorks onNavigate={navigate} />
-          <VetDirectory />
-          <PetStores />
+          <VetDirectory onNavigate={navigate} />
+          <PetStores onNavigate={navigate} />
           <CommunityFeed onOpenFeed={() => navigate("feed")} />
           <PremiumSection />
           <TrustSafety />

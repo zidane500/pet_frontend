@@ -7,6 +7,7 @@ export const vetsApi = {
     region?: string;
     search?: string;
     page?: number;
+    per_page?: number;
   }): Promise<PaginatedResponse<Vet>> => {
     const res = await client.get("/vets", { params: filters });
     return res.data;

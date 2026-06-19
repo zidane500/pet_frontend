@@ -6,6 +6,7 @@ export function usePetStores(filters?: {
   region?: string;
   search?: string;
   page?: number;
+  per_page?: number;
 }) {
   return useQuery({
     queryKey: ["pet-stores", filters],

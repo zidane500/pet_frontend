@@ -7,6 +7,7 @@ export const petStoresApi = {
     region?: string;
     search?: string;
     page?: number;
+    per_page?: number;
   }): Promise<PaginatedResponse<PetStore>> => {
     const res = await client.get("/pet-stores", { params: filters });
     return res.data;

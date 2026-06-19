@@ -6,6 +6,7 @@ export function useLostFound(filters?: {
   species?: string;
   city?: string;
   page?: number;
+  per_page?: number;
 }) {
   return useQuery({
     queryKey: ["lost-found", filters],

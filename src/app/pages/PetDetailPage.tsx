@@ -21,6 +21,7 @@ import {
 import { useListing } from "../../hooks/useListings";
 import { useListings } from "../../hooks/useListings";
 import { useToggleFavorite } from "../../hooks/useFavorites";
+import { useAuth } from "../../hooks/useAuth";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ export function PetDetailPage({
 }: PetDetailPageProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const { user, isLoggedIn } = useAuth();
 
   const id = listingId ? Number(listingId) : 0;
   const { data: listing, isLoading, isError } = useListing(id);
@@ -220,6 +222,30 @@ export function PetDetailPage({
   const descShort = description.slice(0, 180);
   const isLongDesc = description.length > 180;
   const seller = listing.user;
+  const sellerId = seller?.id ?? listing.user_id;
+  const isOwnListing = Boolean(
+    user?.id && sellerId && Number(user.id) === Number(sellerId),
+  );
+
+  const openSellerConversation = () => {
+    if (!sellerId || isOwnListing) return;
+
+    if (!isLoggedIn) {
+      onNavigate("login");
+      return;
+    }
+
+    const params: Record<string, string> = {
+      userId: String(sellerId),
+      listingId: String(listing.id),
+    };
+
+    if (seller?.name) params.partnerName = seller.name;
+    if (seller?.avatar) params.partnerAvatar = seller.avatar;
+
+    onNavigate("messages", params);
+  };
+
   const similarItems = (similarData?.data ?? [])
     .filter((s) => s.id !== listing.id)
     .slice(0, 4);
@@ -551,12 +577,11 @@ export function PetDetailPage({
                 background:
                   "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
               }}
-              onClick={() =>
-                onNavigate("messages", { userId: String(seller.id) })
-              }
+              onClick={openSellerConversation}
+              disabled={isOwnListing}
             >
               <MessageCircle size={16} />
-              Envoyer un message
+              {isOwnListing ? "Votre annonce" : "Envoyer un message"}
             </button>
             <button
               className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
@@ -743,13 +768,11 @@ export function PetDetailPage({
                     background:
                       "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
                   }}
-                  onClick={() =>
-                    seller &&
-                    onNavigate("messages", { userId: String(seller.id) })
-                  }
+                  onClick={openSellerConversation}
+                  disabled={isOwnListing}
                 >
                   <MessageCircle size={16} />
-                  Contacter
+                  {isOwnListing ? "Votre annonce" : "Contacter"}
                 </button>
               </div>
             </div>
@@ -831,13 +854,11 @@ export function PetDetailPage({
                       background:
                         "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
                     }}
-                    onClick={() =>
-                      seller &&
-                      onNavigate("messages", { userId: String(seller.id) })
-                    }
+                    onClick={openSellerConversation}
+                    disabled={isOwnListing}
                   >
                     <MessageCircle size={16} />
-                    Envoyer un message
+                    {isOwnListing ? "Votre annonce" : "Envoyer un message"}
                   </button>
                   <button
                     className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2"
@@ -879,12 +900,11 @@ export function PetDetailPage({
           style={{
             background: "linear-gradient(135deg, var(--pc-primary), #2ecc8a)",
           }}
-          onClick={() =>
-            seller && onNavigate("messages", { userId: String(seller.id) })
-          }
+          onClick={openSellerConversation}
+          disabled={isOwnListing}
         >
           <MessageCircle size={16} />
-          Contacter
+          {isOwnListing ? "Votre annonce" : "Contacter"}
         </button>
       </div>
 

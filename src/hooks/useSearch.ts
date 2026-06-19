@@ -23,10 +23,18 @@ export const DEFAULT_FILTERS: ActiveFilters = {
   adoptable: false,
 };
 
-export function useSearch(initialQuery = "") {
+export function useSearch(
+  initialQuery = "",
+  initialFilters: Partial<ActiveFilters> = {},
+) {
   const [query, setQuery] = useState(initialQuery);
   const [debouncedQuery, setDebounced] = useState(initialQuery);
-  const [activeFilters, setFilters] = useState<ActiveFilters>(DEFAULT_FILTERS);
+  const [activeFilters, setFilters] = useState<ActiveFilters>(() => ({
+    ...DEFAULT_FILTERS,
+    ...initialFilters,
+    species: initialFilters.species ?? DEFAULT_FILTERS.species,
+    type: initialFilters.type ?? DEFAULT_FILTERS.type,
+  }));
   const [sortBy, setSortBy] = useState<
     "newest" | "oldest" | "priceAsc" | "priceDesc"
   >("newest");
@@ -46,7 +54,9 @@ export function useSearch(initialQuery = "") {
   const apiFilters: ListingFilters = {
     search: debouncedQuery || undefined,
     species: activeFilters.species[0] || undefined,
-    type: activeFilters.type[0] || undefined,
+    type: activeFilters.adoptable
+      ? "adoption"
+      : activeFilters.type[0] || undefined,
     city: activeFilters.city || undefined,
     min_price: activeFilters.minPrice
       ? Number(activeFilters.minPrice)
@@ -54,6 +64,9 @@ export function useSearch(initialQuery = "") {
     max_price: activeFilters.maxPrice
       ? Number(activeFilters.maxPrice)
       : undefined,
+    is_vaccinated: activeFilters.vaccinated || undefined,
+    adoptable: activeFilters.adoptable || undefined,
+    sort: sortBy,
     page,
   };
 

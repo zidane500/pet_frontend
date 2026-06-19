@@ -7,6 +7,7 @@ export const lostFoundApi = {
     species?: string;
     city?: string;
     page?: number;
+    per_page?: number;
   }): Promise<PaginatedResponse<LostFound>> => {
     const res = await client.get("/lost-found", { params: filters });
     return res.data;

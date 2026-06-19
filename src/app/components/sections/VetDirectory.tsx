@@ -1,8 +1,9 @@
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
-import { VetCard, type Vet } from "../VetCard";
+import { VetCard } from "../VetCard";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useVets } from "../../../hooks/useVets";
 
 const GOVERNORATES = [
   "Tous",
@@ -15,58 +16,38 @@ const GOVERNORATES = [
   "Ariana",
 ];
 
-const VETS: Vet[] = [
-  {
-    id: "v1",
-    name: "Mehdi Trabelsi",
-    specialty: "Chirurgie",
-    rating: 4.9,
-    reviews: 128,
-    city: "Tunis, Les Berges du Lac",
-    phone: "+216 71 234 567",
-    emergency: true,
-    image:
-      "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=100&h=100&fit=crop&crop=face",
-  },
-  {
-    id: "v2",
-    name: "Sonia Ben Amor",
-    specialty: "NAC & Exotiques",
-    rating: 4.8,
-    reviews: 96,
-    city: "Sfax, Centre-ville",
-    phone: "+216 74 321 456",
-    image:
-      "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=100&h=100&fit=crop&crop=face",
-  },
-  {
-    id: "v3",
-    name: "Karim Gharbi",
-    specialty: "Urgences 24h",
-    rating: 4.7,
-    reviews: 74,
-    city: "Sousse, Khzama",
-    phone: "+216 73 456 789",
-    emergency: true,
-    image:
-      "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=100&h=100&fit=crop&crop=face",
-  },
-  {
-    id: "v4",
-    name: "Leila Chaabane",
-    specialty: "Dermatologie",
-    rating: 4.9,
-    reviews: 112,
-    city: "Ariana, Ettadhamen",
-    phone: "+216 71 987 654",
-    image:
-      "https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&h=100&fit=crop&crop=face",
-  },
-];
+function VetCardSkeleton() {
+  return (
+    <div className="glass-card rounded-2xl p-5 border border-[var(--pc-border)]/60 animate-pulse">
+      <div className="flex gap-3.5 mb-4">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--pc-surface-alt)]" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 rounded bg-[var(--pc-surface-alt)] w-3/4" />
+          <div className="h-3 rounded bg-[var(--pc-surface-alt)] w-1/2" />
+        </div>
+      </div>
+      <div className="h-3 rounded bg-[var(--pc-surface-alt)] w-2/3 mb-3" />
+      <div className="h-3 rounded bg-[var(--pc-surface-alt)] w-1/2 mb-4" />
+      <div className="h-10 rounded-xl bg-[var(--pc-surface-alt)]" />
+    </div>
+  );
+}
 
-export function VetDirectory() {
+export function VetDirectory({
+  onNavigate,
+}: {
+  onNavigate?: (page: string, params?: Record<string, string>) => void;
+} = {}) {
   const { t } = useTranslation();
   const [activeGov, setActiveGov] = useState("Tous");
+
+  const { data, isLoading, isFetching } = useVets({
+    city: activeGov === "Tous" ? undefined : activeGov,
+    page: 1,
+    per_page: 4,
+  });
+
+  const vets = data?.data ?? [];
 
   return (
     <section className="py-16 bg-white dark:bg-[var(--pc-surface)]">
@@ -102,6 +83,7 @@ export function VetDirectory() {
             </p>
           </div>
           <button
+            onClick={() => setActiveGov("Tous")}
             className="flex items-center gap-1.5 text-[var(--pc-primary)] font-semibold flex-shrink-0"
             style={{ fontSize: "14px" }}
           >
@@ -109,7 +91,6 @@ export function VetDirectory() {
           </button>
         </div>
 
-        {/* Filter chips */}
         <div
           className="flex gap-2.5 overflow-x-auto pb-3 mb-8"
           style={{ scrollbarWidth: "none" }}
@@ -131,9 +112,24 @@ export function VetDirectory() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {VETS.map((vet, i) => (
-            <VetCard key={vet.id} vet={vet} index={i} />
-          ))}
+          {isLoading || isFetching ? (
+            Array.from({ length: 4 }).map((_, i) => <VetCardSkeleton key={i} />)
+          ) : vets.length > 0 ? (
+            vets.map((vet, i) => (
+              <VetCard
+                key={vet.id}
+                vet={vet}
+                index={i}
+                onClick={() =>
+                  onNavigate?.("vet-profile", { id: String(vet.id) })
+                }
+              />
+            ))
+          ) : (
+            <div className="col-span-full text-center py-10 text-[var(--pc-text-secondary)]">
+              Aucun vétérinaire trouvé pour ce gouvernorat.
+            </div>
+          )}
         </div>
       </div>
     </section>

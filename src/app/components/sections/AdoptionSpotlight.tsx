@@ -10,7 +10,7 @@ const COLORS = [
 ];
 
 function formatAge(months: number | null | undefined): string {
-  if (!months) return "";
+  if (months == null) return "";
   if (months < 12) return `${months} mois`;
   const y = Math.floor(months / 12);
   return `${y} an${y > 1 ? "s" : ""}`;
@@ -32,7 +32,11 @@ export function AdoptionSpotlight({
   const { t } = useTranslation();
 
   // Charge les annonces d'adoption depuis l'API
-  const { data, isLoading } = useListings({ type: "adoption", page: 1 });
+  const { data, isLoading } = useListings({
+    type: "adoption",
+    page: 1,
+    per_page: 3,
+  });
   const pets = data?.data?.slice(0, 3) ?? [];
 
   return (

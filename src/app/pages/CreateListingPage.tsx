@@ -18,6 +18,7 @@ import {
 import { useCreateListing } from "../../hooks/useListings";
 import { uploadApi } from "../../api/upload";
 import { useAuthStore } from "../../store/authStore";
+import type { Listing } from "../../types";
 
 interface CreateListingPageProps {
   onBack: () => void;
@@ -1054,9 +1055,10 @@ export function CreateListingPage({
 
       await createListing.mutateAsync({
         title: form.title,
-        type: form.category as any,
+        type: form.category as Listing["type"],
         species: form.species || undefined,
         breed: form.breed || undefined,
+        age_months: ageInMonths,
         price: form.isFree
           ? undefined
           : form.price
@@ -1071,7 +1073,7 @@ export function CreateListingPage({
         contact_phone: form.phone || undefined,
         contact_email: form.email || undefined,
         photos: photos.length > 0 ? photos : undefined,
-      } as any);
+      });
 
       setPublished(true);
       queryClient.invalidateQueries({ queryKey: ["listings"] });
