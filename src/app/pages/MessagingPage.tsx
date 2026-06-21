@@ -223,6 +223,8 @@ export function MessagingPage({
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [activeUserId, setActiveUserId] = useState<number | null>(null);
+  const [showMobileConversationList, setShowMobileConversationList] =
+    useState(false);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -298,6 +300,8 @@ export function MessagingPage({
   const activeConversation =
     conversationsForList.find((c) => c.partner.id === activeUserId) ?? null;
   const activePartner = activeConversation?.partner ?? null;
+  const shouldShowConversationListOnMobile =
+    showMobileConversationList || !activePartner;
   const conversationQuery = useConversation(activeUserId);
   const sendMessage = useSendMessage();
 
@@ -343,10 +347,10 @@ export function MessagingPage({
 
   return (
     <div
-      className="min-h-screen bg-[var(--pc-surface-alt)] dark:bg-[#060C12]"
+      className="h-screen overflow-hidden bg-[var(--pc-surface-alt)] dark:bg-[#060C12] flex flex-col"
       dir={isRtl ? "rtl" : "ltr"}
     >
-      <header className="sticky top-0 z-30 bg-[var(--pc-surface)]/95 dark:bg-[#0D1117]/95 backdrop-blur-xl border-b border-[var(--pc-border)]">
+      <header className="flex-shrink-0 z-30 bg-[var(--pc-surface)]/95 dark:bg-[#0D1117]/95 backdrop-blur-xl border-b border-[var(--pc-border)]">
         <div
           className={`flex items-center gap-3 px-4 py-3.5 ${isRtl ? "flex-row-reverse" : ""}`}
         >
@@ -370,12 +374,14 @@ export function MessagingPage({
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-3 sm:p-4 pb-24">
-        <div className="h-[calc(100vh-110px)] grid grid-cols-1 md:grid-cols-[340px_1fr] bg-[var(--pc-surface)] dark:bg-[#0D1117] rounded-3xl overflow-hidden border border-[var(--pc-border)] shadow-sm">
+      <main className="flex-1 min-h-0 w-full max-w-6xl mx-auto p-3 sm:p-4">
+        <div className="h-full min-h-0 grid grid-cols-1 md:grid-cols-[340px_1fr] bg-[var(--pc-surface)] dark:bg-[#0D1117] rounded-3xl overflow-hidden border border-[var(--pc-border)] shadow-sm">
           <aside
-            className={`border-[var(--pc-border)] ${activePartner ? "hidden md:flex" : "flex"} flex-col ${isRtl ? "md:border-l" : "md:border-r"}`}
+            className={`min-h-0 border-[var(--pc-border)] ${
+              shouldShowConversationListOnMobile ? "flex" : "hidden"
+            } md:flex flex-col ${isRtl ? "md:border-l" : "md:border-r"}`}
           >
-            <div className="p-4 border-b border-[var(--pc-border)]">
+            <div className="flex-shrink-0 p-4 border-b border-[var(--pc-border)]">
               <div className="relative">
                 <Search
                   size={15}
@@ -401,7 +407,7 @@ export function MessagingPage({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pc-scrollbar">
               {conversationsQuery.isLoading ? (
                 <div className="p-4 space-y-3">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -419,7 +425,10 @@ export function MessagingPage({
                     key={conversation.partner.id}
                     conversation={conversation}
                     active={conversation.partner.id === activeUserId}
-                    onClick={() => setActiveUserId(conversation.partner.id)}
+                    onClick={() => {
+                      setActiveUserId(conversation.partner.id);
+                      setShowMobileConversationList(false);
+                    }}
                     isRtl={isRtl}
                   />
                 ))
@@ -428,18 +437,20 @@ export function MessagingPage({
           </aside>
 
           <section
-            className={`${!activePartner ? "hidden md:flex" : "flex"} flex-col min-w-0`}
+            className={`${
+              shouldShowConversationListOnMobile ? "hidden" : "flex"
+            } md:flex flex-col min-w-0 min-h-0`}
           >
             {!activePartner ? (
               <EmptyPanel label="Sélectionnez une conversation" />
             ) : (
               <>
                 <div
-                  className={`flex items-center gap-3 px-4 py-3 border-b border-[var(--pc-border)] ${isRtl ? "flex-row-reverse" : ""}`}
+                  className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-[var(--pc-border)] ${isRtl ? "flex-row-reverse" : ""}`}
                 >
                   <button
                     type="button"
-                    onClick={() => setActiveUserId(null)}
+                    onClick={() => setShowMobileConversationList(true)}
                     className="md:hidden w-8 h-8 rounded-full border border-[var(--pc-border)] flex items-center justify-center"
                     aria-label="Retour aux conversations"
                   >
@@ -461,7 +472,7 @@ export function MessagingPage({
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3 pc-scrollbar scroll-smooth">
                   {conversationQuery.isLoading ? (
                     <div className="space-y-3">
                       {Array.from({ length: 6 }).map((_, i) => (
@@ -501,7 +512,7 @@ export function MessagingPage({
                   </div>
                 )}
 
-                <div className="p-3 border-t border-[var(--pc-border)]">
+                <div className="flex-shrink-0 p-3 border-t border-[var(--pc-border)]">
                   <div
                     className={`flex items-end gap-2 ${isRtl ? "flex-row-reverse" : ""}`}
                   >

@@ -1,4 +1,27 @@
-@import './fonts.css';
-@import './tailwind.css';
-@import './theme.css';
-@import './globals.css';
+@import "./fonts.css";
+@import "./tailwind.css";
+@import "./theme.css";
+@import "./globals.css";
+
+.pc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 120, 120, 0.45) transparent;
+}
+
+.pc-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pc-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.35);
+  border-radius: 999px;
+}
+
+.pc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.55);
+}

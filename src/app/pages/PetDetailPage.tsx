@@ -94,13 +94,29 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function toNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function formatPrice(
-  price: number | null | undefined,
+  price: number | string | null | undefined,
   isFree: boolean,
 ): string {
   if (isFree) return "Gratuit";
-  if (!price) return "À négocier";
-  return `${Number(price).toLocaleString("fr-TN")} DT`;
+
+  const numericPrice = toNumber(price);
+
+  if (numericPrice === null || numericPrice <= 0) {
+    return "À négocier";
+  }
+
+  return `${numericPrice.toLocaleString("fr-TN")} DT`;
 }
 
 // ─── Loading Skeleton ─────────────────────────────────────────────────────────

@@ -44,7 +44,7 @@ function AppInner() {
   const { nav, navigate, goBack } = useNav();
   const { user, isLoggedIn, login, register, logout } = useAuth();
 
-  useRealtimeUserChannel(isLoggedIn ? user?.id : null);
+  useRealtimeUserChannel(isLoggedIn ? (user?.id ?? null) : null);
 
   useEffect(() => {
     const saved = localStorage.getItem("petconnect-theme");
@@ -137,13 +137,30 @@ function AppInner() {
     favorites: <FavoritesPage onBack={goBack} onNavigate={navigate} />,
     premium: <PremiumPage onBack={goBack} onNavigate={navigate} />,
     settings: <SettingsPage onBack={goBack} onNavigate={navigate} />,
-    "vet-profile": <VetProfilePage onBack={goBack} onNavigate={navigate} />,
+
+    // ── Pages de profil — reçoivent maintenant l'ID depuis les paramètres de navigation ──
+    "vet-profile": (
+      <VetProfilePage
+        onBack={goBack}
+        onNavigate={navigate}
+        vetId={nav.params?.id}
+      />
+    ),
     "shop-profile": (
-      <PetShopProfilePage onBack={goBack} onNavigate={navigate} />
+      <PetShopProfilePage
+        onBack={goBack}
+        onNavigate={navigate}
+        shopId={nav.params?.id}
+      />
     ),
     "shelter-profile": (
-      <ShelterProfilePage onBack={goBack} onNavigate={navigate} />
+      <ShelterProfilePage
+        onBack={goBack}
+        onNavigate={navigate}
+        shelterId={nav.params?.id}
+      />
     ),
+
     faq: <FAQPage onBack={goBack} onNavigate={navigate} />,
     contact: <ContactPage onBack={goBack} onNavigate={navigate} />,
     "not-found": <NotFoundPage onNavigate={navigate} />,

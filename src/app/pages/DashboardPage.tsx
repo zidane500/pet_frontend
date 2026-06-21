@@ -9,6 +9,13 @@ import {
 } from "../../hooks/useDashboard";
 import { useCreateListing } from "../../hooks/useListings";
 import { useAuthStore } from "../../store/authStore";
+import { useFavorites, useToggleFavorite } from "../../hooks/useFavorites";
+import { useConversations } from "../../hooks/useMessages";
+import {
+  useNotifications,
+  useMarkAllRead,
+  useMarkNotificationRead,
+} from "../../hooks/useNotifications";
 import {
   AreaChart,
   Area,
@@ -48,11 +55,19 @@ import {
   Camera,
   RefreshCw,
   Clock,
+  Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { ConfirmModal } from "../components/ui/GlobalModals";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { LangSelector } from "../components/LangSelector";
-import type { DashboardData, Listing } from "../../types";
+import type {
+  DashboardData,
+  Listing,
+  Favorite,
+  ConversationSummary,
+  AppNotification,
+} from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,252 +106,6 @@ interface ListingItem {
   daysLeft: number;
   source?: Listing;
 }
-
-interface NotificationItem {
-  id: string;
-  type: string;
-  icon: string;
-  text: string;
-  time: string;
-  read: boolean;
-}
-
-// ─── Static / Mock Data ───────────────────────────────────────────────────────
-
-const STATS: {
-  label: string;
-  value: number;
-  icon: string;
-  color: string;
-  trend: number;
-}[] = [
-  {
-    label: "Annonces actives",
-    value: 4,
-    icon: "📋",
-    color: "emerald",
-    trend: 1,
-  },
-  {
-    label: "Vues totales",
-    value: 1248,
-    icon: "👁️",
-    color: "blue",
-    trend: 84,
-  },
-  {
-    label: "Messages non lus",
-    value: 3,
-    icon: "💬",
-    color: "purple",
-    trend: 0,
-  },
-  {
-    label: "Total annonces",
-    value: 12,
-    icon: "🐾",
-    color: "amber",
-    trend: 2,
-  },
-];
-
-const AREA_DATA = Array.from({ length: 30 }, (_, i) => ({
-  day: `J${i + 1}`,
-  views: Math.floor(20 + Math.random() * 80),
-}));
-
-const BAR_DATA = [
-  { day: "Lun", count: 4 },
-  { day: "Mar", count: 7 },
-  { day: "Mer", count: 3 },
-  { day: "Jeu", count: 9 },
-  { day: "Ven", count: 5 },
-  { day: "Sam", count: 11 },
-  { day: "Dim", count: 6 },
-];
-
-const RECENT_ACTIVITY = [
-  {
-    icon: "💬",
-    text: "Nouveau message de Sami Trabelsi concernant votre annonce Labrador",
-    time: "Il y a 5 min",
-  },
-  {
-    icon: "❤️",
-    text: "Quelqu'un a ajouté votre annonce Chat Siamois en favori",
-    time: "Il y a 22 min",
-  },
-  {
-    icon: "👁️",
-    text: "Votre annonce Perroquet Ara a reçu 34 nouvelles vues",
-    time: "Il y a 1h",
-  },
-  {
-    icon: "✅",
-    text: "Votre profil a été vérifié avec succès",
-    time: "Il y a 2h",
-  },
-];
-
-const MOCK_LISTINGS_BASE: ListingItem[] = [
-  {
-    id: "1",
-    title: "Labrador Retriever Mâle 3 mois",
-    type: "vente",
-    price: "800 DT",
-    city: "Tunis",
-    image:
-      "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=400&h=250&fit=crop",
-    views: 342,
-    favorites: 18,
-    messages: 7,
-    status: "active",
-    daysLeft: 18,
-  },
-  {
-    id: "2",
-    title: "Chat Siamois Femelle 2 ans",
-    type: "adoption",
-    price: "Gratuit",
-    city: "Sfax",
-    image:
-      "https://images.unsplash.com/photo-1533743983669-94fa5c4338ec?w=400&h=250&fit=crop",
-    views: 156,
-    favorites: 12,
-    messages: 4,
-    status: "active",
-    daysLeft: 5,
-  },
-  {
-    id: "3",
-    title: "Perroquet Ara Bleu",
-    type: "vente",
-    price: "1200 DT",
-    city: "Sousse",
-    image:
-      "https://images.unsplash.com/photo-1552728089-57bdde30beb3?w=400&h=250&fit=crop",
-    views: 89,
-    favorites: 5,
-    messages: 2,
-    status: "paused",
-    daysLeft: 22,
-  },
-  {
-    id: "4",
-    title: "Lapin Nain Blanc",
-    type: "adoption",
-    price: "Gratuit",
-    city: "Monastir",
-    image:
-      "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?w=400&h=250&fit=crop",
-    views: 203,
-    favorites: 9,
-    messages: 3,
-    status: "sold",
-    daysLeft: 0,
-  },
-];
-
-const MOCK_FAVORITES: ListingItem[] = [
-  {
-    id: "f1",
-    title: "Golden Retriever Femelle 4 mois",
-    type: "vente",
-    price: "950 DT",
-    city: "La Marsa",
-    image:
-      "https://images.unsplash.com/photo-1552053831-71594a27632d?w=400&h=250&fit=crop",
-    views: 511,
-    favorites: 34,
-    messages: 12,
-    status: "active",
-    daysLeft: 28,
-  },
-  {
-    id: "f2",
-    title: "Berger Allemand Mâle 1 an",
-    type: "adoption",
-    price: "Gratuit",
-    city: "Ariana",
-    image:
-      "https://images.unsplash.com/photo-1589941013453-ec89f33b5e95?w=400&h=250&fit=crop",
-    views: 287,
-    favorites: 21,
-    messages: 8,
-    status: "active",
-    daysLeft: 14,
-  },
-];
-
-const MOCK_CONVERSATIONS = [
-  {
-    id: "c1",
-    avatar: "ST",
-    name: "Sami Trabelsi",
-    lastMessage: "Bonjour, est-ce que le chien est toujours disponible ?",
-    time: "5 min",
-    unread: 2,
-  },
-  {
-    id: "c2",
-    avatar: "LB",
-    name: "Leila Brahmi",
-    lastMessage: "Merci pour votre réponse rapide !",
-    time: "1h",
-    unread: 0,
-  },
-  {
-    id: "c3",
-    avatar: "MK",
-    name: "Mohamed Karim",
-    lastMessage: "Quel est le prix final ?",
-    time: "3h",
-    unread: 1,
-  },
-];
-
-const MOCK_NOTIFICATIONS_DATA: NotificationItem[] = [
-  {
-    id: "n1",
-    type: "message",
-    icon: "💬",
-    text: "Sami Trabelsi vous a envoyé un message concernant Labrador Retriever",
-    time: "Il y a 5 min",
-    read: false,
-  },
-  {
-    id: "n2",
-    type: "favorite",
-    icon: "❤️",
-    text: "Votre annonce Chat Siamois a été ajoutée en favori",
-    time: "Il y a 22 min",
-    read: false,
-  },
-  {
-    id: "n3",
-    type: "view",
-    icon: "👁️",
-    text: "Votre annonce Perroquet Ara a reçu 34 nouvelles vues aujourd'hui",
-    time: "Il y a 1h",
-    read: true,
-  },
-  {
-    id: "n4",
-    type: "system",
-    icon: "✅",
-    text: "Votre profil a été vérifié avec succès",
-    time: "Il y a 2h",
-    read: true,
-  },
-  {
-    id: "n5",
-    type: "expiry",
-    icon: "⏰",
-    text: "Votre annonce Chat Siamois expire dans 5 jours",
-    time: "Il y a 3h",
-    read: false,
-  },
-];
 
 // ─── Status Badges ────────────────────────────────────────────────────────────
 
@@ -424,7 +193,6 @@ function resolveListingStatus(listing: Listing): ListingStatus {
   ) {
     return "expired";
   }
-
   if (listing.status) return listing.status as ListingStatus;
   return listing.is_active ? "active" : "paused";
 }
@@ -456,7 +224,6 @@ function userInitials(name?: string | null): string {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2);
-
   return parts.map((p) => p[0]?.toUpperCase()).join("") || "U";
 }
 
@@ -464,7 +231,6 @@ function getProfileCompletion(
   user: DashboardData["user"] | null | undefined,
 ): number {
   if (!user) return 0;
-
   const fields = [
     user.name,
     user.email,
@@ -475,7 +241,6 @@ function getProfileCompletion(
     user.bio,
     user.is_verified,
   ];
-
   const completed = fields.filter(Boolean).length;
   return Math.round((completed / fields.length) * 100);
 }
@@ -542,7 +307,6 @@ function buildRecentActivity(
   dashboard?: DashboardData | null,
 ): RecentActivityItem[] {
   const items: RecentActivityItem[] = [];
-
   if ((dashboard?.unread_messages ?? 0) > 0) {
     items.push({
       icon: "💬",
@@ -550,7 +314,6 @@ function buildRecentActivity(
       time: "Maintenant",
     });
   }
-
   if ((dashboard?.total_views ?? 0) > 0) {
     items.push({
       icon: "👁️",
@@ -558,7 +321,6 @@ function buildRecentActivity(
       time: "Aujourd'hui",
     });
   }
-
   dashboard?.recent_listings?.slice(0, 3).forEach((listing) => {
     items.push({
       icon: "🐾",
@@ -566,7 +328,6 @@ function buildRecentActivity(
       time: timeAgoLabel(listing.created_at),
     });
   });
-
   if (items.length === 0) {
     items.push({
       icon: "✨",
@@ -574,12 +335,55 @@ function buildRecentActivity(
       time: "—",
     });
   }
-
   return items.slice(0, 5);
 }
 
 function positiveBadge(value: number | undefined): number | undefined {
   return value && value > 0 ? value : undefined;
+}
+
+// ─── Notification helpers ─────────────────────────────────────────────────────
+
+function notifIcon(notif: AppNotification): string {
+  const cat = notif.data?.category;
+  if (cat === "messages") return "💬";
+  if (cat === "annonces") return "🐾";
+  if (cat === "adoptions") return "❤️";
+  if (cat === "systeme") return "✅";
+  return "🔔";
+}
+
+function notifText(notif: AppNotification): string {
+  return notif.data?.body ?? notif.data?.title ?? "Nouvelle notification";
+}
+
+// ─── Favorite helpers ─────────────────────────────────────────────────────────
+
+function favoriteToListingItem(fav: Favorite): ListingItem | null {
+  const item = fav.favoritable as Listing | undefined;
+  if (!item) return null;
+  return {
+    id: String(fav.favoritable_id),
+    title: (item as Listing).title ?? "Annonce",
+    type: (item as Listing).type ?? "vente",
+    price: formatPriceFromListing(item as Listing),
+    city: (item as Listing).city ?? "—",
+    image:
+      (item as Listing).photos?.[0] ??
+      `https://picsum.photos/seed/fav-${fav.id}/400/250`,
+    views: (item as Listing).views_count ?? 0,
+    favorites: 0,
+    messages: 0,
+    status: resolveListingStatus(item as Listing),
+    daysLeft: getDaysLeft((item as Listing).expires_at),
+    source: item as Listing,
+  };
+}
+
+// ─── Conversation helpers ─────────────────────────────────────────────────────
+
+function partnerInitials(name?: string | null): string {
+  return userInitials(name);
 }
 
 const tabVariants = {
@@ -616,7 +420,7 @@ function Toast({ message, show }: { message: string; show: boolean }) {
   );
 }
 
-// ─── Profile Ring ──────────────────────────────────────────────────────────────
+// ─── Profile Ring ─────────────────────────────────────────────────────────────
 
 function ProfileRing({ pct, initials }: { pct: number; initials: string }) {
   const r = 24;
@@ -732,7 +536,6 @@ function OverviewTab({
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Area Chart */}
         <div className="glass-card rounded-2xl p-5">
           <h3 className="font-semibold text-[var(--pc-text-primary)] mb-4 flex items-center gap-2 text-sm">
             <TrendingUp size={15} className="text-[var(--pc-primary)]" />
@@ -795,7 +598,6 @@ function OverviewTab({
           </ResponsiveContainer>
         </div>
 
-        {/* Bar Chart */}
         <div className="glass-card rounded-2xl p-5">
           <h3 className="font-semibold text-[var(--pc-text-primary)] mb-4 flex items-center gap-2 text-sm">
             <MessageCircle size={15} className="text-[var(--pc-primary)]" />
@@ -880,8 +682,7 @@ function OverviewTab({
             background: "linear-gradient(135deg, var(--pc-primary), #15a870)",
           }}
         >
-          <Plus size={16} />
-          Créer une annonce
+          <Plus size={16} /> Créer une annonce
         </motion.button>
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -889,8 +690,7 @@ function OverviewTab({
           onClick={() => onNavigate("messages")}
           className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold text-sm border border-[var(--pc-border)] text-[var(--pc-text-primary)] bg-[var(--pc-surface)] hover:bg-[var(--pc-surface-alt)] transition-colors"
         >
-          <MessageCircle size={16} />
-          Voir les messages
+          <MessageCircle size={16} /> Voir les messages
         </motion.button>
       </div>
     </div>
@@ -986,53 +786,38 @@ function MyListingsTab({
     setTimeout(() => setToast({ show: false, message: "" }), 2500);
   };
 
-  const openModal = (type: ModalState["type"], listingId: string) => {
+  const openModal = (type: ModalState["type"], listingId: string) =>
     setModal({ type, listingId, loading: false });
-  };
-
   const closeModal = () =>
     setModal({ type: null, listingId: null, loading: false });
 
   const handleConfirm = async () => {
     if (!modal.listingId || !modal.type) return;
     setModal((m) => ({ ...m, loading: true }));
-
     const id = Number(modal.listingId);
     const type = modal.type;
-
     try {
-      if (type === "delete") {
-        await deleteListing.mutateAsync(id);
-      }
-
-      if (type === "pause") {
+      if (type === "delete") await deleteListing.mutateAsync(id);
+      if (type === "pause")
         await updateListing.mutateAsync({
           id,
           data: { is_active: false, status: "paused" },
         });
-      }
-
-      if (type === "resume") {
+      if (type === "resume")
         await updateListing.mutateAsync({
           id,
           data: { is_active: true, status: "active" },
         });
-      }
-
-      if (type === "sold") {
+      if (type === "sold")
         await updateListing.mutateAsync({
           id,
           data: { is_active: false, status: "sold" },
         });
-      }
-
-      if (type === "adopted") {
+      if (type === "adopted")
         await updateListing.mutateAsync({
           id,
           data: { is_active: false, status: "adopted" },
         });
-      }
-
       if (type === "renew") {
         const nextExpiry = new Date(Date.now() + 30 * 86_400_000).toISOString();
         await updateListing.mutateAsync({
@@ -1040,7 +825,6 @@ function MyListingsTab({
           data: { is_active: true, status: "active", expires_at: nextExpiry },
         });
       }
-
       const toastMessages: Record<string, string> = {
         delete: "Annonce supprimée",
         pause: "Annonce mise en pause",
@@ -1059,7 +843,6 @@ function MyListingsTab({
 
   const handleDuplicate = async (listing: ListingItem) => {
     if (!listing.source) return;
-
     try {
       const source = listing.source;
       await createListing.mutateAsync({
@@ -1098,13 +881,11 @@ function MyListingsTab({
     filter === "all"
       ? listingItems
       : listingItems.filter((l) => l.status === filter);
-
   const currentModalCfg = modal.type ? MODAL_CONFIG[modal.type] : null;
 
   return (
     <div>
       <Toast show={toast.show} message={toast.message} />
-
       {currentModalCfg && (
         <ConfirmModal
           open={modal.type !== null}
@@ -1117,8 +898,6 @@ function MyListingsTab({
           loading={modal.loading}
         />
       )}
-
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-[var(--pc-text-primary)]">
           Mes annonces{" "}
@@ -1135,12 +914,9 @@ function MyListingsTab({
             background: "linear-gradient(135deg, var(--pc-primary), #15a870)",
           }}
         >
-          <Plus size={14} />
-          Créer une annonce
+          <Plus size={14} /> Créer une annonce
         </motion.button>
       </div>
-
-      {/* Filter pills */}
       <div
         className="flex gap-2 overflow-x-auto pb-2 mb-5"
         style={{ scrollbarWidth: "none" }}
@@ -1149,19 +925,13 @@ function MyListingsTab({
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-              filter === f.key
-                ? "text-white shadow-sm"
-                : "bg-[var(--pc-surface)] border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)]"
-            }`}
+            className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${filter === f.key ? "text-white shadow-sm" : "bg-[var(--pc-surface)] border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)]"}`}
             style={filter === f.key ? { background: "var(--pc-primary)" } : {}}
           >
             {f.label}
           </button>
         ))}
       </div>
-
-      {/* Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -1236,7 +1006,6 @@ function ListingCard({
       whileHover={{ y: -2, boxShadow: "0 8px 32px rgba(29,125,95,0.12)" }}
       transition={{ duration: 0.2 }}
     >
-      {/* Image */}
       <div className="relative">
         <img
           src={listing.image}
@@ -1258,8 +1027,6 @@ function ListingCard({
           </span>
         )}
       </div>
-
-      {/* Stats bar */}
       <div className="flex items-center gap-4 px-3 py-2 bg-[var(--pc-surface-alt)] text-xs text-[var(--pc-text-secondary)]">
         <span className="flex items-center gap-1">
           <Eye size={11} /> {listing.views.toLocaleString()}
@@ -1271,8 +1038,6 @@ function ListingCard({
           <MessageCircle size={11} /> {listing.messages}
         </span>
       </div>
-
-      {/* Info */}
       <div className="p-3 flex flex-col gap-1.5 flex-1">
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-semibold text-[var(--pc-text-primary)] text-sm leading-tight line-clamp-2 flex-1">
@@ -1292,13 +1057,11 @@ function ListingCard({
         </div>
         {expiresWarn && (
           <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
-            <Clock size={11} />
-            Expire dans {listing.daysLeft} jour{listing.daysLeft > 1 ? "s" : ""}
+            <Clock size={11} /> Expire dans {listing.daysLeft} jour
+            {listing.daysLeft > 1 ? "s" : ""}
           </div>
         )}
       </div>
-
-      {/* Action buttons */}
       <div className="px-3 pb-3 grid grid-cols-3 gap-1.5">
         <button
           onClick={onView}
@@ -1315,21 +1078,15 @@ function ListingCard({
         >
           <Copy size={11} /> Copier
         </button>
-
         {!isDone && (
           <button
             onClick={onPause}
-            className={`flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg transition-colors font-medium ${
-              isActive
-                ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30"
-                : "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
-            }`}
+            className={`flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg transition-colors font-medium ${isActive ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30" : "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"}`}
           >
             {isActive ? <Pause size={11} /> : <Play size={11} />}
             {isActive ? "Pause" : "Reprendre"}
           </button>
         )}
-
         {!isDone && (
           <button
             onClick={listing.type === "adoption" ? onAdopted : onSold}
@@ -1339,7 +1096,6 @@ function ListingCard({
             {listing.type === "adoption" ? "Adopté" : "Vendu"}
           </button>
         )}
-
         {expiresWarn && (
           <button
             onClick={onRenew}
@@ -1348,7 +1104,6 @@ function ListingCard({
             <RefreshCw size={11} /> Renouveler
           </button>
         )}
-
         <button
           onClick={onDelete}
           className={`flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg border border-red-200 text-red-500 dark:border-red-900/40 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium ${isDone ? "col-span-3" : ""}`}
@@ -1360,20 +1115,38 @@ function ListingCard({
   );
 }
 
-// ─── My Favorites Tab ──────────────────────────────────────────────────────────
+// ─── My Favorites Tab — ✅ API réelle ─────────────────────────────────────────
 
 function MyFavoritesTab({
   onNavigate,
 }: {
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }) {
-  const [favorites, setFavorites] = useState<ListingItem[]>(MOCK_FAVORITES);
+  const { data: favorites = [], isLoading } = useFavorites();
+  const { mutate: toggleFavorite, isPending } = useToggleFavorite();
 
-  const removeFavorite = (id: string) => {
-    setFavorites((prev) => prev.filter((f) => f.id !== id));
+  // Filtrer seulement les favoris de type "listing" avec leur objet favoritable
+  const listingFavorites = favorites.filter(
+    (f) =>
+      f.favoritable_type === "listing" ||
+      f.favoritable_type === "App\\Models\\Listing",
+  );
+
+  const handleRemove = (fav: Favorite) => {
+    toggleFavorite({ type: "listing", id: fav.favoritable_id });
   };
 
-  if (favorites.length === 0) {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="glass-card rounded-2xl h-64 animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (listingFavorites.length === 0) {
     return (
       <div className="glass-card rounded-2xl p-12 flex flex-col items-center gap-4 text-center">
         <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center">
@@ -1404,71 +1177,87 @@ function MyFavoritesTab({
         <h2 className="font-semibold text-[var(--pc-text-primary)]">
           Mes favoris{" "}
           <span className="text-[var(--pc-text-secondary)] font-normal text-sm">
-            ({favorites.length})
+            ({listingFavorites.length})
           </span>
         </h2>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {favorites.map((listing) => (
-          <motion.div
-            key={listing.id}
-            className="glass-card rounded-2xl overflow-hidden flex flex-col"
-            whileHover={{ y: -2, boxShadow: "0 8px 32px rgba(29,125,95,0.12)" }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="relative">
-              <img
-                src={listing.image}
-                alt={listing.title}
-                className="w-full aspect-video object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="250" fill="%23374151"%3E%3Crect width="400" height="250"/%3E%3C/svg%3E';
-                }}
-              />
-              <button
-                onClick={() => removeFavorite(listing.id)}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 dark:bg-black/70 flex items-center justify-center text-rose-500 hover:bg-rose-50 transition-colors shadow"
-              >
-                <Heart size={14} className="fill-rose-500" />
-              </button>
-            </div>
-            <div className="p-3 flex flex-col gap-1.5 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-[var(--pc-text-primary)] text-sm leading-tight line-clamp-2 flex-1">
-                  {listing.title}
-                </h3>
-                <span
-                  className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${typeBadgeClass(listing.type)}`}
+        {listingFavorites.map((fav) => {
+          const item = favoriteToListingItem(fav);
+          if (!item) return null;
+          return (
+            <motion.div
+              key={fav.id}
+              className="glass-card rounded-2xl overflow-hidden flex flex-col"
+              whileHover={{
+                y: -2,
+                boxShadow: "0 8px 32px rgba(29,125,95,0.12)",
+              }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="relative">
+                <img
+                  src={item.image}
+                  alt={item.title}
+                  className="w-full aspect-video object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="250" fill="%23374151"%3E%3Crect width="400" height="250"/%3E%3C/svg%3E';
+                  }}
+                />
+                <button
+                  onClick={() => handleRemove(fav)}
+                  disabled={isPending}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 dark:bg-black/70 flex items-center justify-center text-rose-500 hover:bg-rose-50 transition-colors shadow"
                 >
-                  {listing.type}
-                </span>
+                  <Heart size={14} className="fill-rose-500" />
+                </button>
               </div>
-              <div className="flex items-center justify-between text-xs text-[var(--pc-text-secondary)]">
-                <span>📍 {listing.city}</span>
-                <span className="font-semibold text-[var(--pc-text-primary)]">
-                  {listing.price}
-                </span>
+              <div className="p-3 flex flex-col gap-1.5 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-[var(--pc-text-primary)] text-sm leading-tight line-clamp-2 flex-1">
+                    {item.title}
+                  </h3>
+                  <span
+                    className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${typeBadgeClass(item.type)}`}
+                  >
+                    {item.type}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-[var(--pc-text-secondary)]">
+                  <span>📍 {item.city}</span>
+                  <span className="font-semibold text-[var(--pc-text-primary)]">
+                    {item.price}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="px-3 pb-3">
-              <button
-                onClick={() => onNavigate("pet-detail", { id: listing.id })}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--pc-border)] text-[var(--pc-text-primary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
-              >
-                <Eye size={13} /> Voir l'annonce
-              </button>
-            </div>
-          </motion.div>
-        ))}
+              <div className="px-3 pb-3">
+                <button
+                  onClick={() =>
+                    onNavigate("pet-detail", { id: String(fav.favoritable_id) })
+                  }
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium border border-[var(--pc-border)] text-[var(--pc-text-primary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
+                >
+                  <Eye size={13} /> Voir l'annonce
+                </button>
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ─── Messages Tab ──────────────────────────────────────────────────────────────
+// ─── Messages Tab — ✅ API réelle ─────────────────────────────────────────────
 
-function MessagesTab({ onNavigate }: { onNavigate: (page: string) => void }) {
+function MessagesTab({
+  onNavigate,
+}: {
+  onNavigate: (page: string, params?: Record<string, string>) => void;
+}) {
+  const { data: conversations = [], isLoading } = useConversations();
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -1482,71 +1271,127 @@ function MessagesTab({ onNavigate }: { onNavigate: (page: string) => void }) {
           Voir tout
         </button>
       </div>
-      <div className="glass-card rounded-2xl overflow-hidden">
-        {MOCK_CONVERSATIONS.map((conv, i) => (
-          <motion.button
-            key={conv.id}
-            whileHover={{ backgroundColor: "rgba(29,125,95,0.05)" }}
-            onClick={() => onNavigate("messages")}
-            className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${
-              i < MOCK_CONVERSATIONS.length - 1
-                ? "border-b border-[var(--pc-border)]"
-                : ""
-            }`}
-          >
+
+      {isLoading ? (
+        <div className="glass-card rounded-2xl overflow-hidden">
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--pc-primary), #15a870)",
-              }}
+              key={i}
+              className="flex items-center gap-3 p-4 border-b border-[var(--pc-border)] last:border-0"
             >
-              {conv.avatar}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-sm font-semibold text-[var(--pc-text-primary)]">
-                  {conv.name}
-                </span>
-                <span className="text-xs text-[var(--pc-text-secondary)]">
-                  {conv.time}
-                </span>
+              <div className="w-11 h-11 rounded-full bg-[var(--pc-surface-alt)] animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-[var(--pc-surface-alt)] rounded animate-pulse w-1/3" />
+                <div className="h-2 bg-[var(--pc-surface-alt)] rounded animate-pulse w-2/3" />
               </div>
-              <p
-                className={`text-sm truncate ${conv.unread > 0 ? "text-[var(--pc-text-primary)] font-medium" : "text-[var(--pc-text-secondary)]"}`}
-              >
-                {conv.lastMessage}
-              </p>
             </div>
-            {conv.unread > 0 && (
-              <span
-                className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold text-white flex items-center justify-center"
-                style={{ background: "var(--pc-primary)" }}
+          ))}
+        </div>
+      ) : conversations.length === 0 ? (
+        <div className="glass-card rounded-2xl p-12 flex flex-col items-center gap-3 text-center">
+          <span className="text-4xl">💬</span>
+          <p className="text-[var(--pc-text-secondary)] text-sm">
+            Aucune conversation pour le moment
+          </p>
+          <button
+            onClick={() => onNavigate("search")}
+            className="px-4 py-2 rounded-xl text-sm font-medium text-white"
+            style={{ background: "var(--pc-primary)" }}
+          >
+            Explorer les annonces
+          </button>
+        </div>
+      ) : (
+        <div className="glass-card rounded-2xl overflow-hidden">
+          {conversations
+            .slice(0, 5)
+            .map((conv: ConversationSummary, i: number) => (
+              <motion.button
+                key={conv.partner.id}
+                whileHover={{ backgroundColor: "rgba(29,125,95,0.05)" }}
+                onClick={() =>
+                  onNavigate("messages", {
+                    userId: String(conv.partner.id),
+                    partnerName: conv.partner.name,
+                  })
+                }
+                className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${i < Math.min(conversations.length, 5) - 1 ? "border-b border-[var(--pc-border)]" : ""}`}
               >
-                {conv.unread}
-              </span>
-            )}
-            <ChevronRight
-              size={14}
-              className="text-[var(--pc-text-secondary)] shrink-0"
-            />
-          </motion.button>
-        ))}
-      </div>
+                {conv.partner.avatar ? (
+                  <img
+                    src={conv.partner.avatar}
+                    alt={conv.partner.name}
+                    className="w-11 h-11 rounded-full object-cover shrink-0"
+                  />
+                ) : (
+                  <div
+                    className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--pc-primary), #15a870)",
+                    }}
+                  >
+                    {partnerInitials(conv.partner.name)}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-sm font-semibold text-[var(--pc-text-primary)]">
+                      {conv.partner.name}
+                    </span>
+                    <span className="text-xs text-[var(--pc-text-secondary)]">
+                      {timeAgoLabel(conv.last_message?.created_at)}
+                    </span>
+                  </div>
+                  <p
+                    className={`text-sm truncate ${conv.unread_count > 0 ? "text-[var(--pc-text-primary)] font-medium" : "text-[var(--pc-text-secondary)]"}`}
+                  >
+                    {conv.last_message?.content ?? "..."}
+                  </p>
+                </div>
+                {conv.unread_count > 0 && (
+                  <span
+                    className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold text-white flex items-center justify-center"
+                    style={{ background: "var(--pc-primary)" }}
+                  >
+                    {conv.unread_count}
+                  </span>
+                )}
+                <ChevronRight
+                  size={14}
+                  className="text-[var(--pc-text-secondary)] shrink-0"
+                />
+              </motion.button>
+            ))}
+          {conversations.length > 5 && (
+            <button
+              onClick={() => onNavigate("messages")}
+              className="w-full flex items-center justify-center gap-2 p-3 text-sm text-[var(--pc-primary)] font-medium hover:bg-[var(--pc-surface-alt)] transition-colors"
+            >
+              <ExternalLink size={14} /> Voir toutes les conversations (
+              {conversations.length})
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Notifications Tab ─────────────────────────────────────────────────────────
+// ─── Notifications Tab — ✅ API réelle ────────────────────────────────────────
 
 function NotificationsTab() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(
-    MOCK_NOTIFICATIONS_DATA,
-  );
+  const { data, isLoading } = useNotifications();
+  const { mutate: markRead } = useMarkNotificationRead();
+  const { mutate: markAllRead, isPending: markingAll } = useMarkAllRead();
 
-  const markAllRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const notifications: AppNotification[] = data?.data ?? [];
+  const unreadCount = notifications.filter((n) => !n.read_at).length;
+
+  const handleMarkRead = (notif: AppNotification) => {
+    if (notif.read_at) return;
+    markRead(notif.id);
+  };
 
   return (
     <div>
@@ -1564,47 +1409,71 @@ function NotificationsTab() {
         </h2>
         {unreadCount > 0 && (
           <button
-            onClick={markAllRead}
-            className="flex items-center gap-1 text-xs text-[var(--pc-primary)] hover:underline font-medium"
+            onClick={() => markAllRead()}
+            disabled={markingAll}
+            className="flex items-center gap-1 text-xs text-[var(--pc-primary)] hover:underline font-medium disabled:opacity-50"
           >
-            <CheckCircle size={13} />
-            Tout lire
+            <CheckCircle size={13} /> Tout lire
           </button>
         )}
       </div>
-      <div className="glass-card rounded-2xl overflow-hidden">
-        {notifications.map((notif, i) => (
-          <motion.div
-            key={notif.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className={`flex items-start gap-3 p-4 ${
-              i < notifications.length - 1
-                ? "border-b border-[var(--pc-border)]"
-                : ""
-            } ${!notif.read ? "bg-[var(--pc-primary)]/5" : ""}`}
-          >
-            <span className="text-xl leading-none mt-0.5">{notif.icon}</span>
-            <div className="flex-1 min-w-0">
-              <p
-                className={`text-sm leading-snug ${notif.read ? "text-[var(--pc-text-secondary)]" : "text-[var(--pc-text-primary)] font-medium"}`}
-              >
-                {notif.text}
-              </p>
-              <span className="text-xs text-[var(--pc-text-secondary)] mt-0.5 block">
-                {notif.time}
-              </span>
+
+      {isLoading ? (
+        <div className="glass-card rounded-2xl overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3 p-4 border-b border-[var(--pc-border)] last:border-0"
+            >
+              <div className="w-8 h-8 rounded-full bg-[var(--pc-surface-alt)] animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-[var(--pc-surface-alt)] rounded animate-pulse" />
+                <div className="h-2 bg-[var(--pc-surface-alt)] rounded animate-pulse w-1/3" />
+              </div>
             </div>
-            {!notif.read && (
-              <span
-                className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                style={{ background: "var(--pc-primary)" }}
-              />
-            )}
-          </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="glass-card rounded-2xl p-12 flex flex-col items-center gap-3 text-center">
+          <span className="text-4xl">🔔</span>
+          <p className="text-[var(--pc-text-secondary)] text-sm">
+            Aucune notification pour le moment
+          </p>
+        </div>
+      ) : (
+        <div className="glass-card rounded-2xl overflow-hidden">
+          {notifications.map((notif, i) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              onClick={() => handleMarkRead(notif)}
+              className={`flex items-start gap-3 p-4 cursor-pointer transition-colors hover:bg-[var(--pc-surface-alt)] ${i < notifications.length - 1 ? "border-b border-[var(--pc-border)]" : ""} ${!notif.read_at ? "bg-[var(--pc-primary)]/5" : ""}`}
+            >
+              <span className="text-xl leading-none mt-0.5">
+                {notifIcon(notif)}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p
+                  className={`text-sm leading-snug ${notif.read_at ? "text-[var(--pc-text-secondary)]" : "text-[var(--pc-text-primary)] font-medium"}`}
+                >
+                  {notifText(notif)}
+                </p>
+                <span className="text-xs text-[var(--pc-text-secondary)] mt-0.5 block">
+                  {timeAgoLabel(notif.created_at)}
+                </span>
+              </div>
+              {!notif.read_at && (
+                <span
+                  className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                  style={{ background: "var(--pc-primary)" }}
+                />
+              )}
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1629,7 +1498,6 @@ function SettingsTab() {
     bio: "Passionné des animaux depuis toujours. Éleveur amateur à Tunis.",
     location: "Tunis, Tunisie",
   });
-
   const [securityForm, setSecurityForm] = useState({
     current: "",
     newPass: "",
@@ -1671,10 +1539,10 @@ function SettingsTab() {
       localStorage.setItem("petconnect-theme", "light");
     } else {
       localStorage.removeItem("petconnect-theme");
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      document.documentElement.classList.toggle("dark", prefersDark);
+      document.documentElement.classList.toggle(
+        "dark",
+        window.matchMedia("(prefers-color-scheme: dark)").matches,
+      );
     }
   };
 
@@ -1683,8 +1551,6 @@ function SettingsTab() {
       <h2 className="font-semibold text-[var(--pc-text-primary)] mb-4">
         Paramètres
       </h2>
-
-      {/* Sub-tab pills */}
       <div
         className="flex gap-2 overflow-x-auto pb-2 mb-6"
         style={{ scrollbarWidth: "none" }}
@@ -1693,18 +1559,13 @@ function SettingsTab() {
           <button
             key={st.key}
             onClick={() => setSubTab(st.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium whitespace-nowrap shrink-0 transition-all ${
-              subTab === st.key
-                ? "text-white shadow-md"
-                : "bg-[var(--pc-surface)] text-[var(--pc-text-secondary)] border border-[var(--pc-border)] hover:text-[var(--pc-text-primary)]"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium whitespace-nowrap shrink-0 transition-all ${subTab === st.key ? "text-white shadow-md" : "bg-[var(--pc-surface)] text-[var(--pc-text-secondary)] border border-[var(--pc-border)] hover:text-[var(--pc-text-primary)]"}`}
             style={subTab === st.key ? { background: "var(--pc-primary)" } : {}}
           >
             {st.icon} {st.label}
           </button>
         ))}
       </div>
-
       <AnimatePresence mode="wait">
         <motion.div
           key={subTab}
@@ -1739,7 +1600,6 @@ function SettingsTab() {
                   </p>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {profileFields.map(({ key, label }) => (
                   <div key={key}>
@@ -1759,7 +1619,6 @@ function SettingsTab() {
                   </div>
                 ))}
               </div>
-
               <div>
                 <label className="block text-xs font-medium text-[var(--pc-text-secondary)] mb-1">
                   Bio
@@ -1773,7 +1632,6 @@ function SettingsTab() {
                   className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface)] text-[var(--pc-text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--pc-primary)]/30 transition-all resize-none"
                 />
               </div>
-
               <button
                 className="w-full py-2.5 rounded-xl font-semibold text-sm text-white"
                 style={{
@@ -1785,12 +1643,11 @@ function SettingsTab() {
               </button>
             </div>
           )}
-
           {subTab === "security" && (
             <div className="glass-card rounded-2xl p-5 space-y-4">
               <h3 className="font-semibold text-[var(--pc-text-primary)] flex items-center gap-2">
-                <Lock size={16} className="text-[var(--pc-primary)]" />
-                Changer le mot de passe
+                <Lock size={16} className="text-[var(--pc-primary)]" /> Changer
+                le mot de passe
               </h3>
               {[
                 { key: "current" as const, label: "Mot de passe actuel" },
@@ -1826,12 +1683,10 @@ function SettingsTab() {
               </button>
             </div>
           )}
-
           {subTab === "appearance" && (
             <div className="glass-card rounded-2xl p-5 space-y-4">
               <h3 className="font-semibold text-[var(--pc-text-primary)] flex items-center gap-2">
-                <Palette size={16} className="text-[var(--pc-primary)]" />
-                Thème
+                <Palette size={16} className="text-[var(--pc-primary)]" /> Thème
               </h3>
               <div className="grid grid-cols-3 gap-3">
                 {[
@@ -1856,11 +1711,7 @@ function SettingsTab() {
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => applyTheme(opt.key)}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
-                      theme === opt.key
-                        ? "border-[var(--pc-primary)] bg-[var(--pc-primary)]/10 text-[var(--pc-primary)]"
-                        : "border-[var(--pc-border)] bg-[var(--pc-surface)] text-[var(--pc-text-secondary)] hover:border-[var(--pc-primary)]/40"
-                    }`}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${theme === opt.key ? "border-[var(--pc-primary)] bg-[var(--pc-primary)]/10 text-[var(--pc-primary)]" : "border-[var(--pc-border)] bg-[var(--pc-surface)] text-[var(--pc-text-secondary)] hover:border-[var(--pc-primary)]/40"}`}
                   >
                     {opt.icon}
                     <span className="text-xs font-medium">{opt.label}</span>
@@ -1875,12 +1726,10 @@ function SettingsTab() {
               </div>
             </div>
           )}
-
           {subTab === "language" && (
             <div className="glass-card rounded-2xl p-5 space-y-3">
               <h3 className="font-semibold text-[var(--pc-text-primary)] flex items-center gap-2">
-                <Globe size={16} className="text-[var(--pc-primary)]" />
-                Langue
+                <Globe size={16} className="text-[var(--pc-primary)]" /> Langue
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {languages.map((lang) => {
@@ -1891,11 +1740,7 @@ function SettingsTab() {
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => i18n.changeLanguage(lang.code)}
-                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${
-                        isActive
-                          ? "border-[var(--pc-primary)] bg-[var(--pc-primary)]/10"
-                          : "border-[var(--pc-border)] bg-[var(--pc-surface)] hover:border-[var(--pc-primary)]/40"
-                      }`}
+                      className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left ${isActive ? "border-[var(--pc-primary)] bg-[var(--pc-primary)]/10" : "border-[var(--pc-border)] bg-[var(--pc-surface)] hover:border-[var(--pc-primary)]/40"}`}
                     >
                       <span className="text-2xl">{lang.flag}</span>
                       <div className="flex-1">
@@ -1938,7 +1783,6 @@ interface NavTab {
 // ─── Dashboard Page ────────────────────────────────────────────────────────────
 
 export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
-  // ✅ FIXED: Hooks are now correctly called INSIDE the component
   const { user } = useAuthStore();
   const { data: dashData, isLoading: dashLoading } = useDashboard();
   const { data: listingsData, isLoading: listingsLoading } = useMyListings();
@@ -1959,7 +1803,6 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
   );
   const profilePct = getProfileCompletion(dashboardUser);
   const initials = userInitials(dashboardUser?.name);
-
   const displayName = dashboardUser?.name ?? "Utilisateur";
 
   const NAV_TABS: NavTab[] = [
@@ -1997,20 +1840,16 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--pc-surface-alt)] flex">
-      {/* ── Desktop Left Sidebar ─────────────────────────────────────────────── */}
+      {/* Desktop Left Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 shrink-0 fixed top-0 left-0 h-screen border-r border-[var(--pc-border)] bg-[var(--pc-surface)] overflow-y-auto z-20">
-        {/* Back button */}
         <div className="p-4 border-b border-[var(--pc-border)]">
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-sm text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)] transition-colors"
           >
-            <ArrowLeft size={16} />
-            Retour
+            <ArrowLeft size={16} /> Retour
           </button>
         </div>
-
-        {/* Profile section */}
         <div className="p-5 border-b border-[var(--pc-border)]">
           <div className="flex items-start gap-3 mb-3">
             <ProfileRing pct={profilePct} initials={initials} />
@@ -2044,18 +1883,12 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
             Compléter mon profil →
           </button>
         </div>
-
-        {/* Nav list */}
         <nav className="flex-1 p-3 space-y-1">
           {NAV_TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
-                activeTab === tab.key
-                  ? "text-white shadow-sm"
-                  : "text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] hover:text-[var(--pc-text-primary)]"
-              }`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${activeTab === tab.key ? "text-white shadow-sm" : "text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] hover:text-[var(--pc-text-primary)]"}`}
               style={
                 activeTab === tab.key ? { background: "var(--pc-primary)" } : {}
               }
@@ -2064,11 +1897,7 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
               <span className="flex-1">{tab.label}</span>
               {tab.badge !== undefined && (
                 <span
-                  className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                    activeTab === tab.key
-                      ? "bg-white/20 text-white"
-                      : "bg-[var(--pc-primary)]/15 text-[var(--pc-primary)]"
-                  }`}
+                  className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.key ? "bg-white/20 text-white" : "bg-[var(--pc-primary)]/15 text-[var(--pc-primary)]"}`}
                 >
                   {tab.badge}
                 </span>
@@ -2076,8 +1905,6 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
             </button>
           ))}
         </nav>
-
-        {/* Create listing CTA + bottom tools */}
         <div className="p-4 border-t border-[var(--pc-border)]">
           <motion.button
             whileHover={{ scale: 1.02 }}
@@ -2088,10 +1915,8 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
               background: "linear-gradient(135deg, var(--pc-primary), #15a870)",
             }}
           >
-            <Plus size={16} />
-            Créer une annonce
+            <Plus size={16} /> Créer une annonce
           </motion.button>
-
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--pc-border)]">
             <ThemeToggle />
             <LangSelector direction="up" />
@@ -2099,7 +1924,7 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
         </div>
       </aside>
 
-      {/* ── Main Content ─────────────────────────────────────────────────────── */}
+      {/* Main Content */}
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
         {/* Mobile top header */}
         <header className="lg:hidden sticky top-0 z-10 bg-[var(--pc-surface)] border-b border-[var(--pc-border)] px-4 py-3 flex items-center gap-3">
@@ -2133,11 +1958,7 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  activeTab === tab.key
-                    ? "text-white"
-                    : "text-[var(--pc-text-secondary)] bg-[var(--pc-surface-alt)] hover:text-[var(--pc-text-primary)]"
-                }`}
+                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === tab.key ? "text-white" : "text-[var(--pc-text-secondary)] bg-[var(--pc-surface-alt)] hover:text-[var(--pc-text-primary)]"}`}
                 style={
                   activeTab === tab.key
                     ? { background: "var(--pc-primary)" }
