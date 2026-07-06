@@ -1,742 +1,778 @@
-import { useState, useCallback, useRef } from 'react';
-import { motion } from 'motion/react';
-import { useTranslation } from 'react-i18next';
+import { useState, useCallback, useRef } from "react";
+import { motion } from "motion/react";
+import { useTranslation } from "react-i18next";
 import {
-  Camera,
-  Upload,
+  Check,
+  ChevronRight,
   Loader2,
   MapPin,
   Phone,
-  Mail,
   Globe,
   FileText,
-  Clock,
-  Users,
-  Home,
-  CheckCircle,
-} from 'lucide-react';
+  Stethoscope,
+  Store,
+  Heart,
+  PawPrint,
+  Camera,
+} from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import client from "../../api/client";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────
 
-export interface ProfileSetupPageProps {
-  role: 'vet' | 'shop' | 'shelter' | 'breeder';
-  onComplete: () => void;
-  onSkip: () => void;
+type Role = "vet" | "shop" | "shelter" | "breeder" | "owner";
+
+interface BaseForm {
+  phone: string;
+  city: string;
+  address: string;
+  description: string;
+  website: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+interface VetForm extends BaseForm {
+  speciality: string;
+  clinic_name: string;
+  years_experience: string;
+}
 
-const TUNISIAN_CITIES = ['Tunis', 'Sfax', 'Sousse', 'Monastir', 'Bizerte', 'Nabeul', 'Ariana', 'Autres'];
+interface ShopForm extends BaseForm {
+  shop_name: string;
+  opening_hours: string;
+}
 
-const ROLE_META: Record<string, { label: string; color: string; icon: string }> = {
-  vet: { label: 'Vétérinaire', color: 'from-blue-500 to-indigo-600', icon: '🏥' },
-  shop: { label: 'Animalerie', color: 'from-amber-500 to-orange-600', icon: '🏪' },
-  shelter: { label: 'Refuge / SPA', color: 'from-pink-500 to-rose-600', icon: '🏠' },
-  breeder: { label: 'Éleveur', color: 'from-purple-500 to-violet-600', icon: '🐕' },
+interface ShelterForm extends BaseForm {
+  shelter_name: string;
+  capacity: string;
+}
+
+interface BreederForm extends BaseForm {
+  breeder_name: string;
+  speciality: string;
+}
+
+// ── Metadata par rôle ──────────────────────────────────────────
+
+const ROLE_META: Record<
+  Role,
+  { label: string; icon: React.ElementType; color: string }
+> = {
+  vet: { label: "Vétérinaire", icon: Stethoscope, color: "text-blue-500" },
+  shop: { label: "Animalerie", icon: Store, color: "text-purple-500" },
+  shelter: { label: "Refuge", icon: Heart, color: "text-rose-500" },
+  breeder: { label: "Éleveur", icon: PawPrint, color: "text-amber-500" },
+  owner: { label: "Propriétaire", icon: Check, color: "text-green-500" },
 };
 
-// ─── Shared input components ──────────────────────────────────────────────────
+// ── Composants input partagés ──────────────────────────────────
 
 const inputClass =
-  'bg-[var(--pc-surface-alt)] border border-[var(--pc-border)] rounded-xl px-4 py-3 w-full focus:outline-none focus:ring-2 focus:ring-[var(--pc-primary)]/40 text-[var(--pc-text-primary)] text-sm transition-all placeholder:text-[var(--pc-text-secondary)]/60';
+  "w-full px-4 py-3 rounded-xl bg-[var(--pc-surface-2)] border border-[var(--pc-border)] text-[var(--pc-text-primary)] text-sm placeholder:text-[var(--pc-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--pc-primary)] transition-all";
 
-const labelClass = 'text-[var(--pc-text-primary)] font-semibold text-sm mb-1.5 block';
-
-interface FormInputProps {
+function FormInput({
+  label,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+  icon: Icon,
+  required,
+  error,
+}: {
   label: string;
   type?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
+  icon?: React.ElementType;
   required?: boolean;
   error?: string;
-}
-
-function FormInput({ label, type = 'text', value, onChange, placeholder, icon: Icon, required, error }: FormInputProps) {
+}) {
   return (
-    <div>
-      <label className={labelClass}>
-        {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-[var(--pc-text-secondary)] uppercase tracking-wide">
+        {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="relative">
         {Icon && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--pc-text-secondary)] pointer-events-none">
-            <Icon size={15} />
-          </span>
+          <Icon
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--pc-text-secondary)]"
+          />
         )}
         <input
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={`${inputClass} ${Icon ? 'pl-9' : ''} ${error ? 'border-red-400' : ''}`}
+          className={`${inputClass} ${Icon ? "pl-9" : ""} ${error ? "border-red-400" : ""}`}
         />
       </div>
-      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+      {error && <p className="text-red-400 text-xs">{error}</p>}
     </div>
   );
 }
 
-function FormSelect({ label, value, onChange, options, placeholder, required }: {
-  label: string; value: string; onChange: (v: string) => void;
-  options: string[]; placeholder?: string; required?: boolean;
+function FormTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  maxLength = 500,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  maxLength?: number;
 }) {
   return (
-    <div>
-      <label className={labelClass}>
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-[var(--pc-text-secondary)] uppercase tracking-wide">
         {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
       </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputClass}
-      >
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-      </select>
-    </div>
-  );
-}
-
-function FormTextarea({ label, value, onChange, placeholder, rows = 3 }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number;
-}) {
-  return (
-    <div>
-      <label className={labelClass}>{label}</label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        rows={rows}
+        rows={3}
+        maxLength={maxLength}
         className={`${inputClass} resize-none`}
       />
+      <p className="text-xs text-[var(--pc-text-secondary)] text-right">
+        {value.length}/{maxLength}
+      </p>
     </div>
   );
 }
 
-function CheckboxGroup({ label, options, selected, onChange }: {
-  label: string;
-  options: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const toggle = (opt: string) => {
-    onChange(selected.includes(opt) ? selected.filter((s) => s !== opt) : [...selected, opt]);
-  };
+// ── Formulaire Vétérinaire ─────────────────────────────────────
 
-  return (
-    <div>
-      <label className={labelClass}>{label}</label>
-      <div className="flex flex-wrap gap-2">
-        {options.map((opt) => {
-          const checked = selected.includes(opt);
-          return (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => toggle(opt)}
-              className={[
-                'px-3 py-1.5 rounded-lg text-sm font-medium border transition-all',
-                checked
-                  ? 'bg-[#1D7D5F] border-[#1D7D5F] text-white'
-                  : 'bg-[var(--pc-surface-alt)] border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-[#1D7D5F]/60',
-              ].join(' ')}
-            >
-              {checked && <span className="mr-1">✓</span>}
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Upload zone ──────────────────────────────────────────────────────────────
-
-function UploadZone({
-  label,
-  accept = 'image/*',
-  multiple = false,
-  icon: Icon = Camera,
-  hint,
-  onFiles,
-  previewUrls,
+function VetFormFields({
+  form,
+  setForm,
+  errors,
 }: {
-  label: string;
-  accept?: string;
-  multiple?: boolean;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
-  hint?: string;
-  onFiles: (files: File[]) => void;
-  previewUrls?: string[];
+  form: VetForm;
+  setForm: React.Dispatch<React.SetStateAction<VetForm>>;
+  errors: Record<string, string>;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const handleFiles = (fileList: FileList | null) => {
-    if (!fileList) return;
-    onFiles(Array.from(fileList));
-  };
-
-  return (
-    <div>
-      <label className={labelClass}>{label}</label>
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
-        className={[
-          'border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all flex flex-col items-center gap-2 text-center',
-          dragOver
-            ? 'border-[#1D7D5F] bg-[#1D7D5F]/5'
-            : 'border-[var(--pc-border)] bg-[var(--pc-surface-alt)] hover:border-[#1D7D5F]/60 hover:bg-[#1D7D5F]/5',
-        ].join(' ')}
-      >
-        {previewUrls && previewUrls.length > 0 ? (
-          <div className="flex flex-wrap gap-2 justify-center">
-            {previewUrls.map((url, i) => (
-              <img key={i} src={url} alt="" className="w-16 h-16 object-cover rounded-lg" />
-            ))}
-          </div>
-        ) : (
-          <Icon size={28} className="text-[var(--pc-text-secondary)]" />
-        )}
-        <p className="text-sm text-[var(--pc-text-secondary)] font-medium">
-          {previewUrls && previewUrls.length > 0 ? 'Cliquez pour changer' : 'Cliquez ou glissez vos fichiers ici'}
-        </p>
-        {hint && <p className="text-xs text-[var(--pc-text-secondary)]/70">{hint}</p>}
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        multiple={multiple}
-        className="hidden"
-        onChange={(e) => handleFiles(e.target.files)}
-      />
-    </div>
-  );
-}
-
-// ─── Vet form ─────────────────────────────────────────────────────────────────
-
-function VetForm({ onSubmit, loading }: { onSubmit: () => void; loading: boolean }) {
-  const [clinicName, setClinicName] = useState('');
-  const [specialty, setSpecialty] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [phone, setPhone] = useState('');
-  const [description, setDescription] = useState('');
-  const [hours, setHours] = useState('');
-  const [profilePreviews, setProfilePreviews] = useState<string[]>([]);
-  const [clinicPreviews, setClinicPreviews] = useState<string[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const handleProfileFiles = (files: File[]) => {
-    setProfilePreviews(files.map((f) => URL.createObjectURL(f)));
-  };
-
-  const handleClinicFiles = (files: File[]) => {
-    setClinicPreviews(files.slice(0, 5).map((f) => URL.createObjectURL(f)));
-  };
-
-  const handleSubmit = () => {
-    const newErrors: Record<string, string> = {};
-    if (!clinicName.trim()) newErrors.clinicName = 'Nom de la clinique requis';
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-    onSubmit();
-  };
-
   return (
     <div className="space-y-4">
       <FormInput
         label="Nom de la clinique"
-        value={clinicName}
-        onChange={setClinicName}
-        placeholder="Clinique Vétérinaire Al-Shifa"
+        value={form.clinic_name}
+        onChange={(v) => setForm((f) => ({ ...f, clinic_name: v }))}
+        placeholder="Clinique Vétérinaire El Amal"
+        icon={Stethoscope}
         required
-        error={errors.clinicName}
-        icon={Home}
+        error={errors.clinic_name}
       />
-
-      <FormSelect
+      <FormInput
         label="Spécialité"
-        value={specialty}
-        onChange={setSpecialty}
-        options={['Généraliste', 'Chirurgie', 'Dermatologie', 'Urgences', 'Exotiques', 'Orthopédie']}
-        placeholder="Sélectionnez une spécialité"
+        value={form.speciality}
+        onChange={(v) => setForm((f) => ({ ...f, speciality: v }))}
+        placeholder="Chirurgie, Dermatologie, Généraliste..."
+        error={errors.speciality}
       />
-
       <FormInput
-        label="Adresse"
-        value={address}
-        onChange={setAddress}
-        placeholder="12 Rue Ibn Khaldoun"
-        icon={MapPin}
+        label="Années d'expérience"
+        type="number"
+        value={form.years_experience}
+        onChange={(v) => setForm((f) => ({ ...f, years_experience: v }))}
+        placeholder="5"
       />
-
-      <FormSelect
+      <FormInput
+        label="Téléphone"
+        type="tel"
+        value={form.phone}
+        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+        placeholder="+216 XX XXX XXX"
+        icon={Phone}
+        required
+        error={errors.phone}
+      />
+      <FormInput
         label="Ville"
-        value={city}
-        onChange={setCity}
-        options={TUNISIAN_CITIES}
-        placeholder="Sélectionnez une ville"
+        value={form.city}
+        onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+        placeholder="Tunis, Sfax, Sousse..."
+        icon={MapPin}
+        required
+        error={errors.city}
       />
-
       <FormInput
-        label="Téléphone"
-        type="tel"
-        value={phone}
-        onChange={setPhone}
-        placeholder="+216 12 345 678"
-        icon={Phone}
+        label="Adresse"
+        value={form.address}
+        onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+        placeholder="Rue, quartier..."
+        icon={MapPin}
       />
-
+      <FormInput
+        label="Site web"
+        value={form.website}
+        onChange={(v) => setForm((f) => ({ ...f, website: v }))}
+        placeholder="www.mavet.tn"
+        icon={Globe}
+      />
       <FormTextarea
         label="Description"
-        value={description}
-        onChange={setDescription}
-        placeholder="Décrivez votre clinique, vos services et votre approche…"
-        rows={3}
+        value={form.description}
+        onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+        placeholder="Décrivez votre clinique et vos services..."
       />
-
-      <FormInput
-        label="Horaires de travail"
-        value={hours}
-        onChange={setHours}
-        placeholder="Lun-Ven 8h-18h, Sam 8h-12h"
-        icon={Clock}
-      />
-
-      <UploadZone
-        label="Photo de profil"
-        icon={Camera}
-        hint="JPG, PNG — max 5 Mo"
-        onFiles={handleProfileFiles}
-        previewUrls={profilePreviews}
-      />
-
-      <UploadZone
-        label="Photos de la clinique"
-        icon={Upload}
-        multiple
-        hint="Max 5 photos"
-        onFiles={handleClinicFiles}
-        previewUrls={clinicPreviews}
-      />
-
-      <SubmitButton onClick={handleSubmit} loading={loading} />
     </div>
   );
 }
 
-// ─── Shop form ────────────────────────────────────────────────────────────────
+// ── Formulaire Animalerie ──────────────────────────────────────
 
-function ShopForm({ onSubmit, loading }: { onSubmit: () => void; loading: boolean }) {
-  const [shopName, setShopName] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [description, setDescription] = useState('');
-  const [categories, setCategories] = useState<string[]>([]);
-  const [logoPreviews, setLogoPreviews] = useState<string[]>([]);
-  const [coverPreviews, setCoverPreviews] = useState<string[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const handleSubmit = () => {
-    const newErrors: Record<string, string> = {};
-    if (!shopName.trim()) newErrors.shopName = 'Nom de la boutique requis';
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-    onSubmit();
-  };
-
+function ShopFormFields({
+  form,
+  setForm,
+  errors,
+}: {
+  form: ShopForm;
+  setForm: React.Dispatch<React.SetStateAction<ShopForm>>;
+  errors: Record<string, string>;
+}) {
   return (
     <div className="space-y-4">
       <FormInput
-        label="Nom de la boutique"
-        value={shopName}
-        onChange={setShopName}
-        placeholder="Animalerie Mon Ami"
+        label="Nom de l'animalerie"
+        value={form.shop_name}
+        onChange={(v) => setForm((f) => ({ ...f, shop_name: v }))}
+        placeholder="Pet World Tunis"
+        icon={Store}
         required
-        error={errors.shopName}
-        icon={Home}
+        error={errors.shop_name}
       />
-
-      <FormInput
-        label="Adresse"
-        value={address}
-        onChange={setAddress}
-        placeholder="45 Avenue Habib Bourguiba"
-        icon={MapPin}
-      />
-
       <FormInput
         label="Téléphone"
         type="tel"
-        value={phone}
-        onChange={setPhone}
-        placeholder="+216 12 345 678"
+        value={form.phone}
+        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+        placeholder="+216 XX XXX XXX"
         icon={Phone}
+        required
+        error={errors.phone}
       />
-
+      <FormInput
+        label="Ville"
+        value={form.city}
+        onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+        placeholder="Tunis, Sfax, Sousse..."
+        icon={MapPin}
+        required
+        error={errors.city}
+      />
+      <FormInput
+        label="Adresse"
+        value={form.address}
+        onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+        placeholder="Rue, quartier..."
+        icon={MapPin}
+      />
+      <FormInput
+        label="Horaires d'ouverture"
+        value={form.opening_hours}
+        onChange={(v) => setForm((f) => ({ ...f, opening_hours: v }))}
+        placeholder="Lun-Sam 9h-18h"
+        icon={FileText}
+      />
+      <FormInput
+        label="Site web"
+        value={form.website}
+        onChange={(v) => setForm((f) => ({ ...f, website: v }))}
+        placeholder="www.monanimalerie.tn"
+        icon={Globe}
+      />
       <FormTextarea
         label="Description"
-        value={description}
-        onChange={setDescription}
-        placeholder="Décrivez votre boutique et vos services…"
-        rows={3}
+        value={form.description}
+        onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+        placeholder="Décrivez votre animalerie et vos produits..."
       />
-
-      <CheckboxGroup
-        label="Catégories vendues"
-        options={['Nourriture', 'Accessoires', 'Médicaments', 'Toilettage', 'Cages', 'Jouets']}
-        selected={categories}
-        onChange={setCategories}
-      />
-
-      <UploadZone
-        label="Logo"
-        icon={Camera}
-        hint="JPG, PNG — max 5 Mo"
-        onFiles={(files) => setLogoPreviews(files.map((f) => URL.createObjectURL(f)))}
-        previewUrls={logoPreviews}
-      />
-
-      <UploadZone
-        label="Image de couverture"
-        icon={Upload}
-        hint="Recommandé: 1200×400px"
-        onFiles={(files) => setCoverPreviews(files.map((f) => URL.createObjectURL(f)))}
-        previewUrls={coverPreviews}
-      />
-
-      <SubmitButton onClick={handleSubmit} loading={loading} />
     </div>
   );
 }
 
-// ─── Shelter form ─────────────────────────────────────────────────────────────
+// ── Formulaire Refuge ──────────────────────────────────────────
 
-function ShelterForm({ onSubmit, loading }: { onSubmit: () => void; loading: boolean }) {
-  const [orgName, setOrgName] = useState('');
-  const [description, setDescription] = useState('');
-  const [address, setAddress] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [capacity, setCapacity] = useState('');
-  const [animals, setAnimals] = useState<string[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const handleSubmit = () => {
-    const newErrors: Record<string, string> = {};
-    if (!orgName.trim()) newErrors.orgName = "Nom de l'organisation requis";
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-    onSubmit();
-  };
-
+function ShelterFormFields({
+  form,
+  setForm,
+  errors,
+}: {
+  form: ShelterForm;
+  setForm: React.Dispatch<React.SetStateAction<ShelterForm>>;
+  errors: Record<string, string>;
+}) {
   return (
     <div className="space-y-4">
       <FormInput
-        label="Nom de l'organisation"
-        value={orgName}
-        onChange={setOrgName}
-        placeholder="Refuge Les Amis des Animaux"
+        label="Nom du refuge"
+        value={form.shelter_name}
+        onChange={(v) => setForm((f) => ({ ...f, shelter_name: v }))}
+        placeholder="Refuge Espoir Tunis"
+        icon={Heart}
         required
-        error={errors.orgName}
-        icon={Home}
+        error={errors.shelter_name}
       />
-
-      <FormTextarea
-        label="Description"
-        value={description}
-        onChange={setDescription}
-        placeholder="Décrivez votre refuge, votre mission…"
-        rows={3}
-      />
-
-      <FormInput
-        label="Adresse"
-        value={address}
-        onChange={setAddress}
-        placeholder="Rue des Fleurs, Tunis"
-        icon={MapPin}
-      />
-
-      <FormInput
-        label="Téléphone de contact"
-        type="tel"
-        value={contactPhone}
-        onChange={setContactPhone}
-        placeholder="+216 12 345 678"
-        icon={Phone}
-      />
-
-      <FormInput
-        label="Email de contact"
-        type="email"
-        value={contactEmail}
-        onChange={setContactEmail}
-        placeholder="contact@refuge.tn"
-        icon={Mail}
-      />
-
       <FormInput
         label="Capacité d'accueil"
         type="number"
-        value={capacity}
-        onChange={setCapacity}
+        value={form.capacity}
+        onChange={(v) => setForm((f) => ({ ...f, capacity: v }))}
         placeholder="50"
-        icon={Users}
       />
-
-      <CheckboxGroup
-        label="Animaux acceptés"
-        options={['Chiens', 'Chats', 'Lapins', 'Oiseaux', 'Autres']}
-        selected={animals}
-        onChange={setAnimals}
+      <FormInput
+        label="Téléphone"
+        type="tel"
+        value={form.phone}
+        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+        placeholder="+216 XX XXX XXX"
+        icon={Phone}
+        required
+        error={errors.phone}
       />
-
-      <SubmitButton onClick={handleSubmit} loading={loading} />
+      <FormInput
+        label="Ville"
+        value={form.city}
+        onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+        placeholder="Tunis, Sfax, Sousse..."
+        icon={MapPin}
+        required
+        error={errors.city}
+      />
+      <FormInput
+        label="Adresse"
+        value={form.address}
+        onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+        placeholder="Rue, quartier..."
+        icon={MapPin}
+      />
+      <FormInput
+        label="Site web"
+        value={form.website}
+        onChange={(v) => setForm((f) => ({ ...f, website: v }))}
+        placeholder="www.monrefuge.tn"
+        icon={Globe}
+      />
+      <FormTextarea
+        label="Description"
+        value={form.description}
+        onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+        placeholder="Décrivez votre refuge et votre mission..."
+      />
     </div>
   );
 }
 
-// ─── Breeder form ─────────────────────────────────────────────────────────────
+// ── Formulaire Éleveur ─────────────────────────────────────────
 
-function BreederForm({ onSubmit, loading }: { onSubmit: () => void; loading: boolean }) {
-  const [breedingName, setBreedingName] = useState('');
-  const [animalCategories, setAnimalCategories] = useState<string[]>([]);
-  const [description, setDescription] = useState('');
-  const [city, setCity] = useState('');
-  const [certifications, setCertifications] = useState('');
-  const [website, setWebsite] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const handleSubmit = () => {
-    const newErrors: Record<string, string> = {};
-    if (!breedingName.trim()) newErrors.breedingName = "Nom de l'élevage requis";
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-    onSubmit();
-  };
-
+function BreederFormFields({
+  form,
+  setForm,
+  errors,
+}: {
+  form: BreederForm;
+  setForm: React.Dispatch<React.SetStateAction<BreederForm>>;
+  errors: Record<string, string>;
+}) {
   return (
     <div className="space-y-4">
       <FormInput
         label="Nom de l'élevage"
-        value={breedingName}
-        onChange={setBreedingName}
-        placeholder="Élevage Al-Amal"
+        value={form.breeder_name}
+        onChange={(v) => setForm((f) => ({ ...f, breeder_name: v }))}
+        placeholder="Élevage Atlas"
+        icon={PawPrint}
         required
-        error={errors.breedingName}
-        icon={Home}
+        error={errors.breeder_name}
       />
-
-      <CheckboxGroup
-        label="Catégories d'animaux"
-        options={['Chiens', 'Chats', 'Lapins', 'Oiseaux', 'Reptiles']}
-        selected={animalCategories}
-        onChange={setAnimalCategories}
-      />
-
-      <FormTextarea
-        label="Description"
-        value={description}
-        onChange={setDescription}
-        placeholder="Présentez votre élevage, vos méthodes, vos valeurs…"
-        rows={3}
-      />
-
-      <FormSelect
-        label="Localisation"
-        value={city}
-        onChange={setCity}
-        options={TUNISIAN_CITIES}
-        placeholder="Sélectionnez une ville"
-      />
-
       <FormInput
-        label="Certifications"
-        value={certifications}
-        onChange={setCertifications}
-        placeholder="Ex : ANCSEP, agréé ministère…"
-        icon={FileText}
+        label="Spécialité (races)"
+        value={form.speciality}
+        onChange={(v) => setForm((f) => ({ ...f, speciality: v }))}
+        placeholder="Berger Allemand, Labrador..."
+        error={errors.speciality}
       />
-
+      <FormInput
+        label="Téléphone"
+        type="tel"
+        value={form.phone}
+        onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+        placeholder="+216 XX XXX XXX"
+        icon={Phone}
+        required
+        error={errors.phone}
+      />
+      <FormInput
+        label="Ville"
+        value={form.city}
+        onChange={(v) => setForm((f) => ({ ...f, city: v }))}
+        placeholder="Tunis, Sfax, Sousse..."
+        icon={MapPin}
+        required
+        error={errors.city}
+      />
+      <FormInput
+        label="Adresse"
+        value={form.address}
+        onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+        placeholder="Rue, quartier..."
+        icon={MapPin}
+      />
       <FormInput
         label="Site web"
-        type="url"
-        value={website}
-        onChange={setWebsite}
-        placeholder="https://votre-site.tn"
+        value={form.website}
+        onChange={(v) => setForm((f) => ({ ...f, website: v }))}
+        placeholder="www.monelevage.tn"
         icon={Globe}
       />
-
-      <SubmitButton onClick={handleSubmit} loading={loading} />
+      <FormTextarea
+        label="Description"
+        value={form.description}
+        onChange={(v) => setForm((f) => ({ ...f, description: v }))}
+        placeholder="Décrivez votre élevage et vos pratiques..."
+      />
     </div>
   );
 }
 
-// ─── Submit button (shared) ───────────────────────────────────────────────────
+// ── Page principale ────────────────────────────────────────────
 
-function SubmitButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={loading}
-      className="gradient-btn w-full flex items-center justify-center gap-2 py-3 px-6 rounded-xl
-        font-semibold text-white text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-    >
-      {loading ? (
-        <>
-          <Loader2 size={16} className="animate-spin" />
-          Création en cours…
-        </>
-      ) : (
-        <>
-          <CheckCircle size={16} />
-          Créer mon profil
-        </>
-      )}
-    </button>
-  );
+interface ProfileSetupPageProps {
+  role: Role;
+  onComplete: () => void;
+  onSkip: () => void;
 }
 
-// ─── Progress indicator ───────────────────────────────────────────────────────
-
-function ProgressIndicator({ role }: { role: string }) {
-  const steps = ['Inscription', 'Profil', 'Terminé'];
-  const current = 1; // We're on step 2 (Profil)
-
-  return (
-    <div className="flex items-center gap-2">
-      {steps.map((step, i) => (
-        <div key={step} className="flex items-center gap-2">
-          <div className={[
-            'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all',
-            i < current
-              ? 'bg-[#1D7D5F] text-white'
-              : i === current
-                ? 'bg-[#1D7D5F] text-white ring-4 ring-[#1D7D5F]/20'
-                : 'bg-[var(--pc-border)] text-[var(--pc-text-secondary)]',
-          ].join(' ')}>
-            {i < current ? <CheckCircle size={14} /> : i + 1}
-          </div>
-          <span className={`text-xs font-medium hidden sm:block ${i === current ? 'text-[var(--pc-text-primary)]' : 'text-[var(--pc-text-secondary)]'}`}>
-            {step}
-          </span>
-          {i < steps.length - 1 && (
-            <div className={`w-8 h-px ${i < current ? 'bg-[#1D7D5F]' : 'bg-[var(--pc-border)]'}`} />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── MAIN EXPORT ──────────────────────────────────────────────────────────────
-
-export function ProfileSetupPage({ role, onComplete, onSkip }: ProfileSetupPageProps) {
+export function ProfileSetupPage({
+  role,
+  onComplete,
+  onSkip,
+}: ProfileSetupPageProps) {
   const { i18n } = useTranslation();
-  const isRtl = i18n.language === 'ar';
+  const { updateUser } = useAuth();
+  const isRtl = i18n.language === "ar";
+
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // États formulaires par rôle
+  const [vetForm, setVetForm] = useState<VetForm>({
+    clinic_name: "",
+    speciality: "",
+    years_experience: "",
+    phone: "",
+    city: "",
+    address: "",
+    description: "",
+    website: "",
+  });
+  const [shopForm, setShopForm] = useState<ShopForm>({
+    shop_name: "",
+    opening_hours: "",
+    phone: "",
+    city: "",
+    address: "",
+    description: "",
+    website: "",
+  });
+  const [shelterForm, setShelterForm] = useState<ShelterForm>({
+    shelter_name: "",
+    capacity: "",
+    phone: "",
+    city: "",
+    address: "",
+    description: "",
+    website: "",
+  });
+  const [breederForm, setBreederForm] = useState<BreederForm>({
+    breeder_name: "",
+    speciality: "",
+    phone: "",
+    city: "",
+    address: "",
+    description: "",
+    website: "",
+  });
 
   const meta = ROLE_META[role];
 
+  // ── Validation ─────────────────────────────────────────────
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (role === "vet") {
+      if (!vetForm.clinic_name.trim()) errs.clinic_name = "Champ obligatoire";
+      if (!vetForm.phone.trim()) errs.phone = "Champ obligatoire";
+      if (!vetForm.city.trim()) errs.city = "Champ obligatoire";
+    }
+    if (role === "shop") {
+      if (!shopForm.shop_name.trim()) errs.shop_name = "Champ obligatoire";
+      if (!shopForm.phone.trim()) errs.phone = "Champ obligatoire";
+      if (!shopForm.city.trim()) errs.city = "Champ obligatoire";
+    }
+    if (role === "shelter") {
+      if (!shelterForm.shelter_name.trim())
+        errs.shelter_name = "Champ obligatoire";
+      if (!shelterForm.phone.trim()) errs.phone = "Champ obligatoire";
+      if (!shelterForm.city.trim()) errs.city = "Champ obligatoire";
+    }
+    if (role === "breeder") {
+      if (!breederForm.breeder_name.trim())
+        errs.breeder_name = "Champ obligatoire";
+      if (!breederForm.phone.trim()) errs.phone = "Champ obligatoire";
+      if (!breederForm.city.trim()) errs.city = "Champ obligatoire";
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  // ── Submit ─────────────────────────────────────────────────
+
   const handleSubmit = useCallback(async () => {
+    if (!validate()) return;
+
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    onComplete();
-  }, [onComplete]);
+    setError(null);
+
+    try {
+      // 1. Mise à jour du profil utilisateur de base
+      let profilePayload: Record<string, any> = {};
+      let entityPayload: Record<string, any> = {};
+      let entityEndpoint = "";
+
+      if (role === "vet") {
+        profilePayload = { phone: vetForm.phone, city: vetForm.city };
+        entityPayload = {
+          name: vetForm.clinic_name,
+          speciality: vetForm.speciality,
+          years_experience: Number(vetForm.years_experience) || 0,
+          phone: vetForm.phone,
+          city: vetForm.city,
+          address: vetForm.address,
+          description: vetForm.description,
+          website: vetForm.website,
+        };
+        entityEndpoint = "/vets";
+      }
+
+      if (role === "shop") {
+        profilePayload = { phone: shopForm.phone, city: shopForm.city };
+        entityPayload = {
+          name: shopForm.shop_name,
+          opening_hours: shopForm.opening_hours,
+          phone: shopForm.phone,
+          city: shopForm.city,
+          address: shopForm.address,
+          description: shopForm.description,
+          website: shopForm.website,
+        };
+        entityEndpoint = "/pet-stores";
+      }
+
+      if (role === "shelter") {
+        profilePayload = { phone: shelterForm.phone, city: shelterForm.city };
+        entityPayload = {
+          name: shelterForm.shelter_name,
+          capacity: Number(shelterForm.capacity) || 0,
+          phone: shelterForm.phone,
+          city: shelterForm.city,
+          address: shelterForm.address,
+          description: shelterForm.description,
+          website: shelterForm.website,
+        };
+        entityEndpoint = "/shelters";
+      }
+
+      if (role === "breeder") {
+        profilePayload = { phone: breederForm.phone, city: breederForm.city };
+        entityPayload = {
+          name: breederForm.breeder_name,
+          speciality: breederForm.speciality,
+          phone: breederForm.phone,
+          city: breederForm.city,
+          address: breederForm.address,
+          description: breederForm.description,
+          website: breederForm.website,
+        };
+        entityEndpoint = "/breeders";
+      }
+
+      // 2. Mise à jour du profil utilisateur
+      if (Object.keys(profilePayload).length > 0) {
+        const { data } = await client.put("/profile", profilePayload);
+        updateUser(data.user ?? data);
+      }
+
+      // 3. Création de l'entité métier (vet, shop, shelter, breeder)
+      if (entityEndpoint && Object.keys(entityPayload).length > 0) {
+        await client.post(entityEndpoint, entityPayload);
+      }
+
+      onComplete();
+    } catch (err: any) {
+      const apiErrors = err?.response?.data?.errors ?? {};
+      if (Object.keys(apiErrors).length > 0) {
+        const mapped: Record<string, string> = {};
+        Object.entries(apiErrors).forEach(([k, v]) => {
+          mapped[k] = Array.isArray(v) ? v[0] : String(v);
+        });
+        setErrors(mapped);
+      } else {
+        setError(
+          err?.response?.data?.message ?? "Une erreur est survenue. Réessayez.",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    role,
+    vetForm,
+    shopForm,
+    shelterForm,
+    breederForm,
+    updateUser,
+    onComplete,
+  ]);
+
+  // ── Rendu ──────────────────────────────────────────────────
 
   return (
     <div
-      dir={isRtl ? 'rtl' : 'ltr'}
+      dir={isRtl ? "rtl" : "ltr"}
       className="min-h-screen bg-[var(--pc-surface)] flex flex-col"
     >
-      {/* Top bar */}
+      {/* Header */}
       <header className="sticky top-0 z-20 bg-[var(--pc-surface)]/80 backdrop-blur-sm border-b border-[var(--pc-border)] px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          {/* Logo */}
           <div className="flex items-center gap-2">
             <span className="text-2xl">🐾</span>
             <span className="text-[var(--pc-text-primary)] text-lg font-black hidden sm:block">
               Animali<span className="text-[#F4A732]">.tn</span>
             </span>
           </div>
-
-          <ProgressIndicator role={role} />
+          <button
+            onClick={onSkip}
+            className="text-[var(--pc-text-secondary)] text-sm hover:text-[var(--pc-text-primary)] transition-colors"
+          >
+            Passer cette étape →
+          </button>
         </div>
       </header>
 
-      {/* Main content */}
+      {/* Contenu */}
       <main className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="max-w-2xl w-full space-y-6">
-          {/* Header */}
+          {/* Titre */}
           <motion.div
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
             className="text-center space-y-3"
           >
-            <h1 className="text-2xl sm:text-3xl font-black text-[var(--pc-text-primary)]">
-              Configurer votre profil
-            </h1>
-            <p className="text-[var(--pc-text-secondary)] text-sm">
-              Complétez votre profil pour commencer à utiliser Animali.tn
-            </p>
-
-            {/* Role badge */}
-            <div className="inline-flex items-center gap-2">
-              <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold text-white bg-gradient-to-r ${meta.color}`}>
-                <span>{meta.icon}</span>
-                {meta.label}
-              </span>
-            </div>
-          </motion.div>
-
-          {/* Form card */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.08 }}
-            className="glass-card rounded-2xl p-6 sm:p-8"
-          >
-            {/* Form title */}
-            <h2 className="text-lg font-black text-[var(--pc-text-primary)] mb-6 flex items-center gap-2">
-              <span className="text-xl">{meta.icon}</span>
-              {role === 'vet' && 'Profil Vétérinaire'}
-              {role === 'shop' && 'Profil Animalerie'}
-              {role === 'shelter' && 'Profil Refuge'}
-              {role === 'breeder' && 'Profil Éleveur'}
-            </h2>
-
-            {role === 'vet' && <VetForm onSubmit={handleSubmit} loading={loading} />}
-            {role === 'shop' && <ShopForm onSubmit={handleSubmit} loading={loading} />}
-            {role === 'shelter' && <ShelterForm onSubmit={handleSubmit} loading={loading} />}
-            {role === 'breeder' && <BreederForm onSubmit={handleSubmit} loading={loading} />}
-          </motion.div>
-
-          {/* Skip link */}
-          <div className="text-center pb-8">
-            <button
-              type="button"
-              onClick={onSkip}
-              className="text-sm text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)] transition-colors"
+            <div
+              className={`w-14 h-14 rounded-2xl bg-[var(--pc-surface-2)] flex items-center justify-center mx-auto ${meta.color}`}
             >
-              Configurer plus tard →
-            </button>
-          </div>
+              <meta.icon size={28} />
+            </div>
+            <h1 className="text-[var(--pc-text-primary)] text-2xl font-bold">
+              Configurez votre profil {meta.label}
+            </h1>
+            <p className="text-[var(--pc-text-secondary)] text-sm max-w-md mx-auto">
+              Ces informations seront visibles par les utilisateurs de la
+              plateforme. Vous pourrez les modifier à tout moment dans vos
+              paramètres.
+            </p>
+          </motion.div>
+
+          {/* Formulaire */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="bg-[var(--pc-surface-2)] rounded-2xl p-6 space-y-4"
+          >
+            {role === "vet" && (
+              <VetFormFields
+                form={vetForm}
+                setForm={setVetForm}
+                errors={errors}
+              />
+            )}
+            {role === "shop" && (
+              <ShopFormFields
+                form={shopForm}
+                setForm={setShopForm}
+                errors={errors}
+              />
+            )}
+            {role === "shelter" && (
+              <ShelterFormFields
+                form={shelterForm}
+                setForm={setShelterForm}
+                errors={errors}
+              />
+            )}
+            {role === "breeder" && (
+              <BreederFormFields
+                form={breederForm}
+                setForm={setBreederForm}
+                errors={errors}
+              />
+            )}
+            {role === "owner" && (
+              <div className="text-center py-8 space-y-3">
+                <Check size={40} className="text-green-500 mx-auto" />
+                <p className="text-[var(--pc-text-primary)] font-semibold">
+                  Votre compte est prêt !
+                </p>
+                <p className="text-[var(--pc-text-secondary)] text-sm">
+                  Vous pouvez commencer à explorer la plateforme.
+                </p>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Erreur globale */}
+          {error && (
+            <p className="text-red-500 text-sm bg-red-50 dark:bg-red-950/30 px-4 py-3 rounded-xl text-center">
+              {error}
+            </p>
+          )}
+
+          {/* Bouton submit */}
+          <motion.button
+            onClick={handleSubmit}
+            disabled={loading}
+            whileTap={{ scale: 0.98 }}
+            className="w-full py-4 rounded-2xl bg-[#F4A732] text-white font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60 hover:opacity-90 transition-opacity"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Enregistrement...
+              </>
+            ) : role === "owner" ? (
+              <>
+                <Check size={18} />
+                Commencer
+              </>
+            ) : (
+              <>
+                Enregistrer mon profil
+                <ChevronRight size={18} />
+              </>
+            )}
+          </motion.button>
         </div>
       </main>
     </div>

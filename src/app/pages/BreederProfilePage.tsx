@@ -11,14 +11,14 @@ import {
   Shield,
   Heart,
   Share2,
-  Users,
-  Home,
+  Award,
   PawPrint,
   CheckCircle,
   Clock,
   ChevronRight,
+  BadgeCheck,
 } from "lucide-react";
-import { useShelter } from "../../hooks/useShelters";
+import { useBreeder } from "../../hooks/useBreeders";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -42,10 +42,10 @@ function ErrorState({ onBack }: { onBack: () => void }) {
     <div className="min-h-screen bg-[var(--pc-surface)] flex items-center justify-center">
       <div className="text-center space-y-4">
         <p className="text-[var(--pc-text-primary)] text-lg font-semibold">
-          Refuge introuvable
+          Éleveur introuvable
         </p>
         <p className="text-[var(--pc-text-secondary)] text-sm">
-          Ce refuge n'existe pas ou n'est plus disponible.
+          Cet éleveur n'existe pas ou n'est plus disponible.
         </p>
         <button
           onClick={onBack}
@@ -82,45 +82,38 @@ function StatCard({
 
 // ── Page principale ────────────────────────────────────────────
 
-interface ShelterProfilePageProps {
+interface BreederProfilePageProps {
   onBack: () => void;
   onNavigate: (page: string, params?: Record<string, string>) => void;
-  shelterId?: string;
+  breederId?: string;
 }
 
-export function ShelterProfilePage({
+export function BreederProfilePage({
   onBack,
   onNavigate,
-  shelterId,
-}: ShelterProfilePageProps) {
+  breederId,
+}: BreederProfilePageProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("Animaux disponibles");
   const [saved, setSaved] = useState(false);
-  const [selectedDonation, setSelectedDonation] = useState<string | null>(null);
 
-  const id = shelterId ? Number(shelterId) : 0;
-  const { data: shelter, isLoading, isError } = useShelter(id);
+  const id = breederId ? Number(breederId) : 0;
+  const { data: breeder, isLoading, isError } = useBreeder(id);
 
   // ── États de chargement ──────────────────────────────────────
-  if (!shelterId || isLoading) return <LoadingState />;
-  if (isError || !shelter) return <ErrorState onBack={onBack} />;
+  if (!breederId || isLoading) return <LoadingState />;
+  if (isError || !breeder) return <ErrorState onBack={onBack} />;
 
   const coverUrl =
-    shelter.cover_image_url ??
-    shelter.cover_image ??
-    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&h=300&fit=crop";
+    breeder.cover_image_url ??
+    breeder.cover_image ??
+    "https://images.unsplash.com/photo-1558929996-da64ba858215?w=800&h=300&fit=crop";
   const logoUrl =
-    shelter.logo_url ??
-    shelter.logo ??
-    "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop";
-
-  const occupancyPct =
-    shelter.capacity > 0
-      ? Math.round((shelter.current_animals / shelter.capacity) * 100)
-      : 0;
+    breeder.logo_url ??
+    breeder.logo ??
+    "https://images.unsplash.com/photo-1551717743-49959800b1f6?w=200&h=200&fit=crop";
 
   const TABS: Tab[] = ["Animaux disponibles", "À propos", "Avis"];
-  const DONATIONS = ["10 TND", "25 TND", "50 TND", "100 TND"];
 
   return (
     <div className="min-h-screen bg-[var(--pc-surface)]">
@@ -128,7 +121,7 @@ export function ShelterProfilePage({
       <div className="relative h-52 sm:h-64">
         <img
           src={coverUrl}
-          alt={shelter.name}
+          alt={breeder.name}
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/60" />
@@ -162,7 +155,7 @@ export function ShelterProfilePage({
           <div className="w-20 h-20 rounded-2xl border-4 border-[var(--pc-surface)] overflow-hidden shadow-lg">
             <img
               src={logoUrl}
-              alt={shelter.name}
+              alt={breeder.name}
               className="w-full h-full object-cover"
             />
           </div>
@@ -175,83 +168,57 @@ export function ShelterProfilePage({
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-[var(--pc-text-primary)] text-xl font-bold">
-              {shelter.name}
+              {breeder.name}
             </h1>
-            {shelter.verified && (
+            {breeder.verified && (
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
                 <CheckCircle size={11} /> Vérifié
               </span>
             )}
-            {shelter.is_nonprofit && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-medium">
-                <Shield size={11} /> Association
+            {breeder.is_certified && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-medium">
+                <BadgeCheck size={11} /> Certifié
               </span>
             )}
           </div>
-          {shelter.tagline && (
+          {breeder.tagline && (
             <p className="text-[var(--pc-text-secondary)] text-sm italic">
-              "{shelter.tagline}"
+              "{breeder.tagline}"
+            </p>
+          )}
+          {breeder.speciality && (
+            <p className="text-[var(--pc-primary)] text-sm font-medium">
+              🐾 {breeder.speciality}
             </p>
           )}
           <div className="flex items-center gap-1">
             <Star size={14} className="text-yellow-500 fill-yellow-500" />
             <span className="text-[var(--pc-text-primary)] text-sm font-semibold">
-              {shelter.rating.toFixed(1)}
+              {breeder.rating.toFixed(1)}
             </span>
             <span className="text-[var(--pc-text-secondary)] text-xs">
-              ({shelter.reviews_count} avis)
+              ({breeder.reviews_count} avis)
             </span>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <StatCard
+            icon={Award}
+            value={`${breeder.years_experience} ans`}
+            label="Expérience"
+          />
           <StatCard
             icon={PawPrint}
-            value={shelter.current_animals}
-            label="Animaux"
-          />
-          <StatCard icon={Home} value={shelter.capacity} label="Capacité" />
-          <StatCard
-            icon={Users}
-            value={shelter.volunteers_count}
-            label="Bénévoles"
+            value={breeder.animals_sold_total}
+            label="Animaux vendus"
           />
           <StatCard
-            icon={Heart}
-            value={shelter.animals_helped_total}
-            label="Aidés"
+            icon={Shield}
+            value={breeder.is_certified ? "Oui" : "Non"}
+            label="Certifié"
           />
-        </div>
-
-        {/* Occupation */}
-        <div className="p-4 rounded-2xl bg-[var(--pc-surface-2)] space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-[var(--pc-text-secondary)] text-sm">
-              Taux d'occupation
-            </span>
-            <span className="text-[var(--pc-text-primary)] text-sm font-semibold">
-              {shelter.current_animals} / {shelter.capacity} animaux
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-[var(--pc-border)] overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${occupancyPct}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className={`h-full rounded-full ${
-                occupancyPct > 80
-                  ? "bg-red-500"
-                  : occupancyPct > 60
-                    ? "bg-orange-500"
-                    : "bg-green-500"
-              }`}
-            />
-          </div>
-          <p className="text-xs text-[var(--pc-text-secondary)]">
-            {occupancyPct}% occupé
-            {occupancyPct > 80 && " — Refuge presque plein, adoptez !"}
-          </p>
         </div>
 
         {/* Coordonnées */}
@@ -259,42 +226,42 @@ export function ShelterProfilePage({
           <div className="flex items-center gap-3">
             <MapPin size={16} className="text-[var(--pc-primary)] shrink-0" />
             <span className="text-[var(--pc-text-secondary)] text-sm">
-              {shelter.address}, {shelter.city}
+              {breeder.address}, {breeder.city}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             <Phone size={16} className="text-[var(--pc-primary)] shrink-0" />
             <a
-              href={`tel:${shelter.phone}`}
+              href={`tel:${breeder.phone}`}
               className="text-[var(--pc-text-secondary)] text-sm hover:text-[var(--pc-primary)]"
             >
-              {shelter.phone}
+              {breeder.phone}
             </a>
           </div>
 
-          {shelter.email && (
+          {breeder.email && (
             <div className="flex items-center gap-3">
               <Mail size={16} className="text-[var(--pc-primary)] shrink-0" />
               <a
-                href={`mailto:${shelter.email}`}
+                href={`mailto:${breeder.email}`}
                 className="text-[var(--pc-text-secondary)] text-sm hover:text-[var(--pc-primary)]"
               >
-                {shelter.email}
+                {breeder.email}
               </a>
             </div>
           )}
 
-          {shelter.website && (
+          {breeder.website && (
             <div className="flex items-center gap-3">
               <Globe size={16} className="text-[var(--pc-primary)] shrink-0" />
               <a
-                href={`https://${shelter.website}`}
+                href={`https://${breeder.website}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[var(--pc-primary)] text-sm hover:underline"
               >
-                {shelter.website}
+                {breeder.website}
               </a>
             </div>
           )}
@@ -329,13 +296,13 @@ export function ShelterProfilePage({
             {activeTab === "Animaux disponibles" && (
               <div className="space-y-3">
                 <p className="text-[var(--pc-text-secondary)] text-sm">
-                  {shelter.current_animals} animal(aux) en attente d'adoption
+                  Consultez les annonces de cet éleveur
                 </p>
                 <button
                   onClick={() =>
                     onNavigate("search", {
-                      type: "adoption",
-                      shelter: String(shelter.id),
+                      type: "vente",
+                      breeder: String(breeder.id),
                     })
                   }
                   className="w-full flex items-center justify-between p-4 rounded-2xl bg-[var(--pc-surface-2)] hover:bg-[var(--pc-border)] transition-colors"
@@ -347,7 +314,7 @@ export function ShelterProfilePage({
                         Voir les animaux disponibles
                       </p>
                       <p className="text-[var(--pc-text-secondary)] text-xs">
-                        Chiens, chats et autres
+                        {breeder.speciality ?? "Toutes races"}
                       </p>
                     </div>
                   </div>
@@ -361,9 +328,9 @@ export function ShelterProfilePage({
 
             {activeTab === "À propos" && (
               <div className="space-y-4">
-                {shelter.description ? (
+                {breeder.description ? (
                   <p className="text-[var(--pc-text-secondary)] text-sm leading-relaxed">
-                    {shelter.description}
+                    {breeder.description}
                   </p>
                 ) : (
                   <p className="text-[var(--pc-text-secondary)] text-sm italic">
@@ -374,7 +341,7 @@ export function ShelterProfilePage({
                   <Clock size={13} />
                   <span>
                     Membre depuis{" "}
-                    {new Date(shelter.created_at).toLocaleDateString("fr-TN", {
+                    {new Date(breeder.created_at).toLocaleDateString("fr-TN", {
                       year: "numeric",
                       month: "long",
                     })}
@@ -387,42 +354,25 @@ export function ShelterProfilePage({
               <div className="text-center py-8 space-y-2">
                 <Star size={32} className="text-yellow-400 mx-auto" />
                 <p className="text-[var(--pc-text-primary)] font-semibold">
-                  {shelter.rating.toFixed(1)} / 5
+                  {breeder.rating.toFixed(1)} / 5
                 </p>
                 <p className="text-[var(--pc-text-secondary)] text-sm">
-                  {shelter.reviews_count} avis clients
+                  {breeder.reviews_count} avis clients
                 </p>
               </div>
             )}
           </motion.div>
         </AnimatePresence>
 
-        {/* Don */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border border-orange-200 dark:border-orange-800 space-y-3">
-          <h3 className="text-[var(--pc-text-primary)] font-semibold text-sm">
-            Soutenir ce refuge
-          </h3>
-          <div className="grid grid-cols-4 gap-2">
-            {DONATIONS.map((amount) => (
-              <button
-                key={amount}
-                onClick={() => setSelectedDonation(amount)}
-                className={`py-2 rounded-xl text-xs font-medium border transition-all ${
-                  selectedDonation === amount
-                    ? "bg-orange-500 border-orange-500 text-white"
-                    : "border-orange-300 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30"
-                }`}
-              >
-                {amount}
-              </button>
-            ))}
-          </div>
-          {selectedDonation && (
-            <button className="w-full py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors">
-              Faire un don de {selectedDonation}
-            </button>
-          )}
-        </div>
+        {/* CTA Contact */}
+        <button
+          onClick={() =>
+            onNavigate("messages", { userId: String(breeder.user_id) })
+          }
+          className="w-full py-4 rounded-2xl bg-[var(--pc-primary)] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+        >
+          Contacter l'éleveur
+        </button>
       </div>
     </div>
   );
