@@ -3,35 +3,110 @@ import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
+  Share2,
+  Heart,
   MapPin,
   Phone,
   Mail,
-  Globe,
   Star,
-  Shield,
-  Heart,
-  Share2,
+  BadgeCheck,
+  Globe,
   Users,
   Home,
-  PawPrint,
   CheckCircle,
-  Clock,
-  ChevronRight,
+  HeartHandshake,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
-import { useShelter } from "../../hooks/useShelters";
+import { useProfile } from "../../hooks/useProfile";
+import { useListings } from "../../hooks/useListings";
+import { useToggleFavorite } from "../../hooks/useFavorites";
+import { useAuth } from "../../hooks/useAuth";
+import type { Listing } from "../../types";
 
-// ── Types ──────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-type Tab = "Animaux disponibles" | "À propos" | "Avis";
+const TABS = [
+  "Animaux disponibles",
+  "Adoptions réussies",
+  "Dons",
+  "Bénévoles",
+] as const;
+type Tab = (typeof TABS)[number];
 
-// ── Sous-composants ────────────────────────────────────────────
+// ─── Donation tiers (statiques — pas de backend paiement pour l'instant) ──────
+
+const DONATION_TIERS = [
+  {
+    amount: "10 DT",
+    label: "Repas",
+    desc: "Nourrit un animal pendant 3 jours",
+    emoji: "🍖",
+  },
+  {
+    amount: "25 DT",
+    label: "Soins",
+    desc: "Couvre les frais vétérinaires de base",
+    emoji: "💊",
+  },
+  {
+    amount: "50 DT",
+    label: "Famille",
+    desc: "Soutient un animal pendant un mois",
+    emoji: "🏠",
+  },
+  {
+    amount: "Autre",
+    label: "Libre",
+    desc: "Montant de votre choix",
+    emoji: "💛",
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatAge(months?: number | null): string {
+  if (!months) return "Âge inconnu";
+  if (months < 12) return `${months} mois`;
+  const y = Math.floor(months / 12);
+  return `${y} an${y > 1 ? "s" : ""}`;
+}
+
+function userInitials(name?: string | null): string {
+  const parts = (name ?? "Refuge")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase()).join("") || "R";
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((s) => (
+        <Star
+          key={s}
+          size={14}
+          className={
+            s <= Math.round(rating)
+              ? "fill-amber-400 text-amber-400"
+              : "text-gray-300"
+          }
+        />
+      ))}
+    </div>
+  );
+}
 
 function LoadingState() {
   return (
     <div className="min-h-screen bg-[var(--pc-surface)] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-full border-4 border-[var(--pc-primary)] border-t-transparent animate-spin" />
-        <p className="text-[var(--pc-text-secondary)] text-sm">Chargement...</p>
+      <div className="flex flex-col items-center gap-3 text-[var(--pc-text-secondary)]">
+        <Loader2 size={32} className="animate-spin text-[var(--pc-primary)]" />
+        <p className="text-sm">Chargement du refuge...</p>
       </div>
     </div>
   );
@@ -39,17 +114,19 @@ function LoadingState() {
 
 function ErrorState({ onBack }: { onBack: () => void }) {
   return (
-    <div className="min-h-screen bg-[var(--pc-surface)] flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <p className="text-[var(--pc-text-primary)] text-lg font-semibold">
+    <div className="min-h-screen bg-[var(--pc-surface)] flex items-center justify-center px-4">
+      <div className="text-center">
+        <AlertCircle size={48} className="mx-auto mb-4 text-red-400" />
+        <h2 className="font-bold text-[var(--pc-text-primary)] mb-2">
           Refuge introuvable
-        </p>
-        <p className="text-[var(--pc-text-secondary)] text-sm">
-          Ce refuge n'existe pas ou n'est plus disponible.
+        </h2>
+        <p className="text-sm text-[var(--pc-text-secondary)] mb-4">
+          Ce profil n'existe pas ou a été supprimé.
         </p>
         <button
           onClick={onBack}
-          className="px-4 py-2 rounded-xl bg-[var(--pc-primary)] text-white text-sm"
+          className="px-5 py-2.5 rounded-xl font-semibold text-white text-sm"
+          style={{ background: "var(--pc-primary)" }}
         >
           Retour
         </button>
@@ -58,29 +135,71 @@ function ErrorState({ onBack }: { onBack: () => void }) {
   );
 }
 
-function StatCard({
-  icon: Icon,
-  value,
-  label,
+// ─── Animal Card ──────────────────────────────────────────────────────────────
+
+function AnimalCard({
+  listing,
+  onNavigate,
 }: {
-  icon: React.ElementType;
-  value: string | number;
-  label: string;
+  listing: Listing;
+  onNavigate: (page: string, params?: Record<string, string>) => void;
 }) {
+  const image =
+    listing.photos?.[0] ??
+    `https://picsum.photos/seed/shelter-animal-${listing.id}/400/300`;
+  const age = formatAge(listing.age_months);
+
   return (
-    <div className="flex flex-col items-center gap-1 p-3 rounded-2xl bg-[var(--pc-surface-2)]">
-      <Icon size={18} className="text-[var(--pc-primary)]" />
-      <span className="text-[var(--pc-text-primary)] font-bold text-lg leading-none">
-        {value}
-      </span>
-      <span className="text-[var(--pc-text-secondary)] text-xs text-center">
-        {label}
-      </span>
+    <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="relative">
+        <img
+          src={image}
+          alt={listing.title}
+          className="w-full h-36 object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              `https://picsum.photos/seed/sa-fb-${listing.id}/400/300`;
+          }}
+        />
+        {listing.is_vaccinated && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full font-medium flex items-center gap-1">
+            <CheckCircle size={10} /> Vacciné
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <div className="font-bold text-sm text-[var(--pc-text-primary)]">
+          {listing.title}
+        </div>
+        <div className="text-xs text-[var(--pc-text-secondary)] mb-1">
+          {listing.breed ?? listing.species ?? "—"}
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-[var(--pc-text-secondary)]">{age}</span>
+          {listing.species && (
+            <span
+              className="text-xs px-2 py-0.5 rounded-full text-white"
+              style={{ background: "var(--pc-primary)" }}
+            >
+              {listing.species}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => onNavigate("pet-detail", { id: String(listing.id) })}
+          className="w-full py-1.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1"
+          style={{
+            background: "linear-gradient(135deg, var(--pc-primary), #15634a)",
+          }}
+        >
+          <Heart size={12} /> Adopter
+        </button>
+      </div>
     </div>
   );
 }
 
-// ── Page principale ────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 interface ShelterProfilePageProps {
   onBack: () => void;
@@ -93,336 +212,420 @@ export function ShelterProfilePage({
   onNavigate,
   shelterId,
 }: ShelterProfilePageProps) {
-  const { t } = useTranslation();
+  const { i18n } = useTranslation();
+  const isRTL = i18n.language === "ar";
+  const { isLoggedIn } = useAuth();
+
   const [activeTab, setActiveTab] = useState<Tab>("Animaux disponibles");
   const [saved, setSaved] = useState(false);
   const [selectedDonation, setSelectedDonation] = useState<string | null>(null);
 
+  // ── API ──
   const id = shelterId ? Number(shelterId) : 0;
-  const { data: shelter, isLoading, isError } = useShelter(id);
+  const { data: shelter, isLoading, isError } = useProfile(id);
+  const { mutate: toggleFavorite, isPending: favPending } = useToggleFavorite();
 
-  // ── États de chargement ──────────────────────────────────────
+  // Annonces d'adoption publiées par ce refuge
+  const { data: listingsData, isLoading: listingsLoading } = useListings(
+    id ? { type: "adoption", per_page: 24 } : undefined,
+  );
+  const availableAnimals = (listingsData?.data ?? []).filter(
+    (l) => l.user_id === id && l.is_active,
+  );
+
+  // ── Guards ──
   if (!shelterId || isLoading) return <LoadingState />;
   if (isError || !shelter) return <ErrorState onBack={onBack} />;
 
-  const coverUrl =
-    shelter.cover_image_url ??
-    shelter.cover_image ??
-    "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800&h=300&fit=crop";
-  const logoUrl =
-    shelter.logo_url ??
-    shelter.logo ??
-    "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop";
+  // ── Derived data ──
+  const name = shelter.name;
+  const bio = shelter.bio ?? "Association de protection animale";
+  const phone = shelter.phone ?? "";
+  const city = [shelter.city, shelter.region].filter(Boolean).join(", ");
+  const avatar =
+    shelter.avatar ??
+    `https://picsum.photos/seed/shelter-logo-${shelter.id}/200/200`;
+  const cover = `https://picsum.photos/seed/shelter-cover-${shelter.id}/800/300`;
+  const initials = userInitials(name);
+  const memberSince = new Date(shelter.created_at).toLocaleDateString("fr-TN", {
+    month: "long",
+    year: "numeric",
+  });
 
-  const occupancyPct =
-    shelter.capacity > 0
-      ? Math.round((shelter.current_animals / shelter.capacity) * 100)
-      : 0;
-
-  const TABS: Tab[] = ["Animaux disponibles", "À propos", "Avis"];
-  const DONATIONS = ["10 TND", "25 TND", "50 TND", "100 TND"];
+  const handleToggleFavorite = () => {
+    if (!isLoggedIn) {
+      onNavigate("login");
+      return;
+    }
+    setSaved((prev) => !prev);
+    // On toggle un "favori utilisateur" — pas d'endpoint dédié shelter,
+    // on utilise le profil user comme référence
+  };
 
   return (
-    <div className="min-h-screen bg-[var(--pc-surface)]">
-      {/* ── Cover ── */}
-      <div className="relative h-52 sm:h-64">
+    <div
+      dir={isRTL ? "rtl" : "ltr"}
+      className="min-h-screen bg-[var(--pc-surface)] pb-24"
+    >
+      {/* Hero Cover */}
+      <div className="relative h-48 sm:h-64">
         <img
-          src={coverUrl}
-          alt={shelter.name}
+          src={cover}
+          alt="Shelter cover"
           className="w-full h-full object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              `https://picsum.photos/seed/sc-fb-${shelter.id}/800/300`;
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/60" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-        {/* Boutons header */}
-        <div className="absolute top-4 left-4 right-4 flex justify-between">
-          <button
-            onClick={onBack}
-            className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"
-          >
-            <ArrowLeft size={18} className="text-white" />
+        <button
+          onClick={onBack}
+          className="absolute top-4 left-4 w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-md"
+        >
+          <ArrowLeft size={20} />
+        </button>
+
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button className="w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-md">
+            <Share2 size={18} />
           </button>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSaved((s) => !s)}
-              className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center"
-            >
-              <Heart
-                size={18}
-                className={saved ? "text-red-400 fill-red-400" : "text-white"}
-              />
-            </button>
-            <button className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-              <Share2 size={18} className="text-white" />
-            </button>
-          </div>
+          <button
+            onClick={handleToggleFavorite}
+            disabled={favPending}
+            className="w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center shadow-md"
+          >
+            <Heart
+              size={18}
+              className={saved ? "fill-red-500 text-red-500" : "text-gray-600"}
+            />
+          </button>
         </div>
 
-        {/* Logo */}
-        <div className="absolute -bottom-10 left-4">
-          <div className="w-20 h-20 rounded-2xl border-4 border-[var(--pc-surface)] overflow-hidden shadow-lg">
+        <div className="absolute -bottom-12 left-6">
+          {shelter.avatar ? (
             <img
-              src={logoUrl}
-              alt={shelter.name}
-              className="w-full h-full object-cover"
+              src={avatar}
+              alt={name}
+              className="w-24 h-24 rounded-2xl object-cover ring-4 ring-white shadow-lg"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  `https://picsum.photos/seed/sl-fb-${shelter.id}/100/100`;
+              }}
             />
+          ) : (
+            <div
+              className="w-24 h-24 rounded-2xl ring-4 ring-white shadow-lg flex items-center justify-center text-white text-2xl font-bold"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--pc-primary), #15634a)",
+              }}
+            >
+              {initials}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="px-4 pt-16 pb-4">
+        <div className="flex items-start gap-2 flex-wrap">
+          <h1 className="text-xl font-bold text-[var(--pc-text-primary)]">
+            {name}
+          </h1>
+          {shelter.is_verified && (
+            <BadgeCheck size={20} className="text-[var(--pc-primary)] mt-0.5" />
+          )}
+          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs rounded-full font-medium">
+            Refuge / Association
+          </span>
+        </div>
+
+        {bio && (
+          <p className="text-sm text-[var(--pc-text-secondary)] mt-1 italic">
+            "{bio}"
+          </p>
+        )}
+
+        <div className="mt-3 space-y-1.5">
+          {city && (
+            <div className="flex items-center gap-2 text-sm text-[var(--pc-text-secondary)]">
+              <MapPin size={14} className="text-[var(--pc-primary)] shrink-0" />
+              {city}
+            </div>
+          )}
+          {phone && (
+            <div className="flex items-center gap-2 text-sm text-[var(--pc-text-secondary)]">
+              <Phone size={14} className="text-[var(--pc-primary)] shrink-0" />
+              {phone}
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm text-[var(--pc-text-secondary)]">
+            <Globe size={14} className="text-[var(--pc-primary)] shrink-0" />
+            Membre depuis {memberSince}
           </div>
         </div>
       </div>
 
-      {/* ── Contenu ── */}
-      <div className="px-4 pt-14 pb-24 max-w-2xl mx-auto space-y-5">
-        {/* Infos principales */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-[var(--pc-text-primary)] text-xl font-bold">
-              {shelter.name}
-            </h1>
-            {shelter.verified && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium">
-                <CheckCircle size={11} /> Vérifié
-              </span>
-            )}
-            {shelter.is_nonprofit && (
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-medium">
-                <Shield size={11} /> Association
-              </span>
-            )}
-          </div>
-          {shelter.tagline && (
-            <p className="text-[var(--pc-text-secondary)] text-sm italic">
-              "{shelter.tagline}"
-            </p>
-          )}
-          <div className="flex items-center gap-1">
-            <Star size={14} className="text-yellow-500 fill-yellow-500" />
-            <span className="text-[var(--pc-text-primary)] text-sm font-semibold">
-              {shelter.rating.toFixed(1)}
-            </span>
-            <span className="text-[var(--pc-text-secondary)] text-xs">
-              ({shelter.reviews_count} avis)
-            </span>
-          </div>
+      {/* Stats row */}
+      <div className="px-4 mb-4">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { value: availableAnimals.length.toString(), label: "Disponibles" },
+            { value: shelter.is_verified ? "✓" : "—", label: "Vérifié" },
+            {
+              value:
+                shelter.plan === "premium" || shelter.plan === "pro"
+                  ? "⭐"
+                  : "—",
+              label: "Plan",
+            },
+          ].map((stat, i) => (
+            <div key={i} className="glass-card p-3 text-center rounded-2xl">
+              <div className="font-bold text-base text-[var(--pc-text-primary)]">
+                {stat.value}
+              </div>
+              <div className="text-xs text-[var(--pc-text-secondary)]">
+                {stat.label}
+              </div>
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-2">
-          <StatCard
-            icon={PawPrint}
-            value={shelter.current_animals}
-            label="Animaux"
-          />
-          <StatCard icon={Home} value={shelter.capacity} label="Capacité" />
-          <StatCard
-            icon={Users}
-            value={shelter.volunteers_count}
-            label="Bénévoles"
-          />
-          <StatCard
-            icon={Heart}
-            value={shelter.animals_helped_total}
-            label="Aidés"
-          />
-        </div>
-
-        {/* Occupation */}
-        <div className="p-4 rounded-2xl bg-[var(--pc-surface-2)] space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-[var(--pc-text-secondary)] text-sm">
-              Taux d'occupation
-            </span>
-            <span className="text-[var(--pc-text-primary)] text-sm font-semibold">
-              {shelter.current_animals} / {shelter.capacity} animaux
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-[var(--pc-border)] overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${occupancyPct}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className={`h-full rounded-full ${
-                occupancyPct > 80
-                  ? "bg-red-500"
-                  : occupancyPct > 60
-                    ? "bg-orange-500"
-                    : "bg-green-500"
-              }`}
-            />
-          </div>
-          <p className="text-xs text-[var(--pc-text-secondary)]">
-            {occupancyPct}% occupé
-            {occupancyPct > 80 && " — Refuge presque plein, adoptez !"}
-          </p>
-        </div>
-
-        {/* Coordonnées */}
-        <div className="p-4 rounded-2xl bg-[var(--pc-surface-2)] space-y-3">
-          <div className="flex items-center gap-3">
-            <MapPin size={16} className="text-[var(--pc-primary)] shrink-0" />
-            <span className="text-[var(--pc-text-secondary)] text-sm">
-              {shelter.address}, {shelter.city}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Phone size={16} className="text-[var(--pc-primary)] shrink-0" />
+      {/* Action buttons */}
+      <div className="px-4 mb-6">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setActiveTab("Animaux disponibles")}
+            className="py-2.5 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2"
+            style={{
+              background: "linear-gradient(135deg, var(--pc-primary), #15634a)",
+            }}
+          >
+            <Home size={15} /> Adopter
+          </button>
+          <button
+            onClick={() => setActiveTab("Dons")}
+            className="py-2.5 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2"
+            style={{
+              background: "linear-gradient(135deg, var(--pc-accent), #d4871a)",
+            }}
+          >
+            <HeartHandshake size={15} /> Faire un don
+          </button>
+          <button
+            onClick={() => setActiveTab("Bénévoles")}
+            className="py-2.5 rounded-2xl border border-[var(--pc-border)] text-sm font-medium text-[var(--pc-text-primary)] flex items-center justify-center gap-2"
+          >
+            <Users size={15} /> Devenir bénévole
+          </button>
+          {phone ? (
             <a
-              href={`tel:${shelter.phone}`}
-              className="text-[var(--pc-text-secondary)] text-sm hover:text-[var(--pc-primary)]"
+              href={`tel:${phone}`}
+              className="py-2.5 rounded-2xl border border-[var(--pc-border)] text-sm font-medium text-[var(--pc-text-primary)] flex items-center justify-center gap-2"
             >
-              {shelter.phone}
+              <Mail size={15} /> Contacter
             </a>
-          </div>
-
-          {shelter.email && (
-            <div className="flex items-center gap-3">
-              <Mail size={16} className="text-[var(--pc-primary)] shrink-0" />
-              <a
-                href={`mailto:${shelter.email}`}
-                className="text-[var(--pc-text-secondary)] text-sm hover:text-[var(--pc-primary)]"
-              >
-                {shelter.email}
-              </a>
-            </div>
-          )}
-
-          {shelter.website && (
-            <div className="flex items-center gap-3">
-              <Globe size={16} className="text-[var(--pc-primary)] shrink-0" />
-              <a
-                href={`https://${shelter.website}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[var(--pc-primary)] text-sm hover:underline"
-              >
-                {shelter.website}
-              </a>
-            </div>
+          ) : (
+            <button
+              onClick={() =>
+                onNavigate("messages", {
+                  userId: String(shelter.id),
+                  partnerName: shelter.name,
+                })
+              }
+              className="py-2.5 rounded-2xl border border-[var(--pc-border)] text-sm font-medium text-[var(--pc-text-primary)] flex items-center justify-center gap-2"
+            >
+              <Mail size={15} /> Contacter
+            </button>
           )}
         </div>
+      </div>
 
-        {/* Onglets */}
-        <div className="flex gap-1 p-1 rounded-xl bg-[var(--pc-surface-2)]">
+      {/* Tabs */}
+      <div className="px-4 mb-4">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+              className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 activeTab === tab
-                  ? "bg-[var(--pc-primary)] text-white shadow"
-                  : "text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)]"
+                  ? "text-white"
+                  : "bg-[var(--pc-surface-alt)] text-[var(--pc-text-secondary)]"
               }`}
+              style={
+                activeTab === tab ? { background: "var(--pc-primary)" } : {}
+              }
             >
               {tab}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Contenu onglets */}
+      {/* Tab content */}
+      <div className="px-4">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-          >
-            {activeTab === "Animaux disponibles" && (
-              <div className="space-y-3">
-                <p className="text-[var(--pc-text-secondary)] text-sm">
-                  {shelter.current_animals} animal(aux) en attente d'adoption
+          {/* ── Animaux disponibles — données réelles ── */}
+          {activeTab === "Animaux disponibles" && (
+            <motion.div
+              key="animals"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              {listingsLoading ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="glass-card rounded-2xl h-52 animate-pulse"
+                    />
+                  ))}
+                </div>
+              ) : availableAnimals.length === 0 ? (
+                <div className="glass-card rounded-2xl p-10 text-center">
+                  <p className="text-4xl mb-3">🐾</p>
+                  <p className="text-sm text-[var(--pc-text-secondary)] font-medium">
+                    Aucun animal disponible pour le moment
+                  </p>
+                  <p className="text-xs text-[var(--pc-text-secondary)] mt-1">
+                    Revenez bientôt !
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {availableAnimals.map((listing) => (
+                    <AnimalCard
+                      key={listing.id}
+                      listing={listing}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── Adoptions réussies — statique (pas de backend dédié) ── */}
+          {activeTab === "Adoptions réussies" && (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="glass-card rounded-2xl p-8 text-center"
+            >
+              <p className="text-4xl mb-3">❤️</p>
+              <p className="font-semibold text-[var(--pc-text-primary)] mb-1">
+                Histoires de réussite
+              </p>
+              <p className="text-sm text-[var(--pc-text-secondary)]">
+                Ce refuge a aidé de nombreux animaux à trouver un foyer aimant.
+                Les détails des adoptions seront bientôt disponibles.
+              </p>
+            </motion.div>
+          )}
+
+          {/* ── Dons — statique (pas de backend paiement) ── */}
+          {activeTab === "Dons" && (
+            <motion.div
+              key="donations"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-3">
+                {DONATION_TIERS.map((tier) => (
+                  <button
+                    key={tier.amount}
+                    onClick={() => setSelectedDonation(tier.amount)}
+                    className={`glass-card p-4 rounded-2xl text-left transition-all ${
+                      selectedDonation === tier.amount
+                        ? "ring-2 ring-[var(--pc-accent)]"
+                        : ""
+                    }`}
+                  >
+                    <div className="text-2xl mb-2">{tier.emoji}</div>
+                    <div className="font-bold text-[var(--pc-text-primary)]">
+                      {tier.amount}
+                    </div>
+                    <div className="text-xs font-semibold text-[var(--pc-accent)]">
+                      {tier.label}
+                    </div>
+                    <div className="text-xs text-[var(--pc-text-secondary)] mt-1">
+                      {tier.desc}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {selectedDonation && (
+                <button
+                  className="w-full py-3 rounded-2xl font-semibold text-white"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--pc-accent), #d4871a)",
+                  }}
+                >
+                  Faire un don de{" "}
+                  {selectedDonation === "Autre"
+                    ? "montant libre"
+                    : selectedDonation}
+                </button>
+              )}
+              <div className="glass-card p-4 rounded-2xl text-center text-sm text-[var(--pc-text-secondary)]">
+                <p className="font-medium text-[var(--pc-text-primary)] mb-1">
+                  Contactez directement le refuge
+                </p>
+                {phone && <p>{phone}</p>}
+                <p className="mt-1 text-xs">
+                  Les paiements en ligne seront disponibles prochainement.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Bénévoles — statique ── */}
+          {activeTab === "Bénévoles" && (
+            <motion.div
+              key="volunteers"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="glass-card rounded-2xl p-6 text-center">
+                <p className="text-4xl mb-3">🤝</p>
+                <p className="font-semibold text-[var(--pc-text-primary)] mb-2">
+                  Rejoignez l'équipe
+                </p>
+                <p className="text-sm text-[var(--pc-text-secondary)] mb-4">
+                  Ce refuge a besoin de bénévoles pour aider les animaux.
+                  Contactez-les directement pour vous engager.
                 </p>
                 <button
                   onClick={() =>
-                    onNavigate("search", {
-                      type: "adoption",
-                      shelter: String(shelter.id),
+                    onNavigate("messages", {
+                      userId: String(shelter.id),
+                      partnerName: shelter.name,
                     })
                   }
-                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-[var(--pc-surface-2)] hover:bg-[var(--pc-border)] transition-colors"
+                  className="w-full py-3 rounded-2xl font-semibold text-white flex items-center justify-center gap-2"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--pc-primary), #15634a)",
+                  }}
                 >
-                  <div className="flex items-center gap-3">
-                    <PawPrint size={20} className="text-[var(--pc-primary)]" />
-                    <div className="text-left">
-                      <p className="text-[var(--pc-text-primary)] text-sm font-medium">
-                        Voir les animaux disponibles
-                      </p>
-                      <p className="text-[var(--pc-text-secondary)] text-xs">
-                        Chiens, chats et autres
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="text-[var(--pc-text-secondary)]"
-                  />
+                  <Users size={16} /> Contacter le refuge
                 </button>
               </div>
-            )}
-
-            {activeTab === "À propos" && (
-              <div className="space-y-4">
-                {shelter.description ? (
-                  <p className="text-[var(--pc-text-secondary)] text-sm leading-relaxed">
-                    {shelter.description}
-                  </p>
-                ) : (
-                  <p className="text-[var(--pc-text-secondary)] text-sm italic">
-                    Aucune description disponible.
-                  </p>
-                )}
-                <div className="flex items-center gap-2 text-[var(--pc-text-secondary)] text-xs">
-                  <Clock size={13} />
-                  <span>
-                    Membre depuis{" "}
-                    {new Date(shelter.created_at).toLocaleDateString("fr-TN", {
-                      year: "numeric",
-                      month: "long",
-                    })}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "Avis" && (
-              <div className="text-center py-8 space-y-2">
-                <Star size={32} className="text-yellow-400 mx-auto" />
-                <p className="text-[var(--pc-text-primary)] font-semibold">
-                  {shelter.rating.toFixed(1)} / 5
-                </p>
-                <p className="text-[var(--pc-text-secondary)] text-sm">
-                  {shelter.reviews_count} avis clients
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Don */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 border border-orange-200 dark:border-orange-800 space-y-3">
-          <h3 className="text-[var(--pc-text-primary)] font-semibold text-sm">
-            Soutenir ce refuge
-          </h3>
-          <div className="grid grid-cols-4 gap-2">
-            {DONATIONS.map((amount) => (
-              <button
-                key={amount}
-                onClick={() => setSelectedDonation(amount)}
-                className={`py-2 rounded-xl text-xs font-medium border transition-all ${
-                  selectedDonation === amount
-                    ? "bg-orange-500 border-orange-500 text-white"
-                    : "border-orange-300 text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/30"
-                }`}
-              >
-                {amount}
-              </button>
-            ))}
-          </div>
-          {selectedDonation && (
-            <button className="w-full py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors">
-              Faire un don de {selectedDonation}
-            </button>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
     </div>
   );
