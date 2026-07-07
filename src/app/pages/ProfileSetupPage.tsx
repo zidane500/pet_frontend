@@ -14,6 +14,7 @@ import {
   Heart,
   PawPrint,
   Camera,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import client from "../../api/client";
@@ -54,7 +55,7 @@ interface BreederForm extends BaseForm {
 // ── Metadata par rôle ──────────────────────────────────────────
 
 const ROLE_META: Record<
-  Role,
+  string,
   { label: string; icon: React.ElementType; color: string }
 > = {
   vet: { label: "Vétérinaire", icon: Stethoscope, color: "text-blue-500" },
@@ -62,6 +63,7 @@ const ROLE_META: Record<
   shelter: { label: "Refuge", icon: Heart, color: "text-rose-500" },
   breeder: { label: "Éleveur", icon: PawPrint, color: "text-amber-500" },
   owner: { label: "Propriétaire", icon: Check, color: "text-green-500" },
+  admin: { label: "Administrateur", icon: Shield, color: "text-red-500" },
 };
 
 // ── Composants input partagés ──────────────────────────────────

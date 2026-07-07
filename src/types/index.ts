@@ -2,7 +2,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  role: "owner" | "vet" | "shop" | "shelter" | "breeder";
+  role: "owner" | "vet" | "shop" | "shelter" | "breeder" | "admin";
   phone?: string | null;
   city?: string | null;
   region?: string | null;

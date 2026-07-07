@@ -31,6 +31,8 @@ import { PremiumPage } from "./app/pages/PremiumPage";
 import { FAQPage } from "./app/pages/FAQPage";
 import { ContactPage } from "./app/pages/ContactPage";
 import { NotFoundPage } from "./app/pages/NotFoundPage";
+import { RequireAdmin } from "./guards/RequireAdmin";
+import { AdminPage } from "./app/pages/AdminPage";
 
 // ─── Convertisseur page → URL ─────────────────────────────────
 
@@ -239,7 +241,9 @@ function AuthPageWrapper() {
   const initialView = location.pathname === "/register" ? "register" : "login";
 
   const handleSuccess = (userData: { name: string; role: string }) => {
-    if (userData.role !== "owner") {
+    if (userData.role === "admin") {
+      navigate("/admin", { replace: true });
+    } else if (userData.role !== "owner") {
       navigate("/profile-setup");
     } else {
       navigate(from, { replace: true });
@@ -314,6 +318,11 @@ export const router = createBrowserRouter([
           { path: "create-listing", element: <CreateListingPageWrapper /> },
           { path: "profile-setup", element: <ProfileSetupPageWrapper /> },
         ],
+      },
+
+      {
+        element: <RequireAdmin />,
+        children: [{ path: "admin", element: <AdminPage /> }],
       },
 
       // ── 404 ─────────────────────────────────────────────────
