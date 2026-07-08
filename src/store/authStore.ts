@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import type { User } from "../types";
 
 interface AuthState {
@@ -11,6 +11,13 @@ interface AuthState {
   logout: () => void;
 }
 
+// ── Nettoyage des anciens tokens localStorage (sécurité migration) ──
+// Supprime les anciennes clés si elles existent encore sur le navigateur
+if (typeof window !== "undefined") {
+  localStorage.removeItem("petconnect_token");
+  localStorage.removeItem("petconnect_user");
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -19,7 +26,6 @@ export const useAuthStore = create<AuthState>()(
       isLoggedIn: false,
 
       setAuth: (user, token) => {
-        localStorage.setItem("petconnect_token", token);
         set({ user, token, isLoggedIn: true });
       },
 
@@ -28,13 +34,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        localStorage.removeItem("petconnect_token");
-        localStorage.removeItem("petconnect_user");
         set({ user: null, token: null, isLoggedIn: false });
       },
     }),
     {
       name: "petconnect_user",
+      storage: createJSONStorage(() => sessionStorage), // ← sessionStorage ici
       partialize: (state) => ({
         user: state.user,
         token: state.token,

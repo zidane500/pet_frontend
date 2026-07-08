@@ -9,11 +9,19 @@ const client = axios.create({
   withCredentials: false,
 });
 
-// Injecter le token automatiquement dans chaque requête
+// Injecter le token automatiquement depuis sessionStorage
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem("petconnect_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const raw = sessionStorage.getItem("petconnect_user");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      const token = parsed?.state?.token;
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // ignore si le JSON est corrompu
+    }
   }
   return config;
 });
@@ -25,9 +33,8 @@ client.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401) {
-      // Token expiré → déconnecter
-      localStorage.removeItem("petconnect_token");
-      localStorage.removeItem("petconnect_user");
+      // Token expiré ou invalide → nettoyer sessionStorage et rediriger
+      sessionStorage.removeItem("petconnect_user");
       window.location.href = "/";
     }
 
