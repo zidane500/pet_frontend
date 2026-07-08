@@ -288,28 +288,53 @@ function FilterPanel({
       </div>
 
       {/* Toggles */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         {[
           { key: "vaccinated" as const, label: "Vacciné uniquement" },
           { key: "adoptable" as const, label: "Adoptable uniquement" },
         ].map(({ key, label }) => (
           <label
             key={key}
-            className="flex items-center justify-between cursor-pointer"
+            htmlFor={`toggle-${key}`}
+            className="flex items-center justify-between cursor-pointer group"
           >
             <span
-              className="font-semibold text-[var(--pc-text-primary)]"
+              className="font-semibold text-[var(--pc-text-primary)] select-none group-hover:text-[var(--pc-primary)] transition-colors"
               style={{ fontSize: "13px" }}
             >
               {label}
             </span>
+
             <button
+              id={`toggle-${key}`}
+              type="button"
+              role="switch"
+              aria-checked={local[key]}
               onClick={() => setLocal((p) => ({ ...p, [key]: !p[key] }))}
-              className={`relative w-11 h-6 rounded-full transition-colors ${local[key] ? "bg-[var(--pc-primary)]" : "bg-[var(--pc-border)]"}`}
+              className={`
+          relative w-12 h-7 rounded-full transition-all duration-300 ease-in-out
+          focus:outline-none focus:ring-2 focus:ring-[var(--pc-primary)] focus:ring-offset-2 focus:ring-offset-[var(--pc-surface)]
+          ${
+            local[key]
+              ? "bg-[var(--pc-primary)]"
+              : "bg-[var(--pc-border)] dark:bg-gray-600"
+          }
+        `}
             >
               <span
-                className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${local[key] ? "translate-x-6" : "translate-x-1"}`}
-              />
+                className={`
+            absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-md
+            transition-transform duration-300 ease-in-out
+            flex items-center justify-center
+            ${local[key] ? "translate-x-5" : "translate-x-0"}
+          `}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${
+                    local[key] ? "bg-[var(--pc-primary)]" : "bg-gray-300"
+                  }`}
+                />
+              </span>
             </button>
           </label>
         ))}

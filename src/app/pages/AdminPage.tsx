@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -264,6 +264,21 @@ function UserFormModal({
     is_verified: user?.is_verified ?? false,
     is_active: user?.is_active ?? true,
   });
+
+  // ── Resync le formulaire à chaque fois qu'un nouvel utilisateur est passé ──
+  useEffect(() => {
+    setForm({
+      name: user?.name ?? "",
+      email: user?.email ?? "",
+      password: "",
+      role: user?.role ?? "owner",
+      phone: user?.phone ?? "",
+      city: user?.city ?? "",
+      plan: user?.plan ?? "free",
+      is_verified: user?.is_verified ?? false,
+      is_active: user?.is_active ?? true,
+    });
+  }, [user?.id, open]);
 
   const set = (key: keyof typeof form, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
