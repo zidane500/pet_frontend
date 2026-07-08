@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getEcho } from "../lib/echo";
 import type { ConversationSummary, Message } from "../types";
@@ -61,13 +61,24 @@ function touchConversation(
 
 export function useRealtimeUserChannel(userId?: number | null): void {
   const queryClient = useQueryClient();
+  const connectedUserId = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    // Ne se connecte que si userId change et est valide
+    if (!userId || userId === connectedUserId.current) return;
 
     const echo = getEcho();
     if (!echo) return;
 
+    // Déconnecte l'ancien canal si différent
+    if (
+      connectedUserId.current !== null &&
+      connectedUserId.current !== userId
+    ) {
+      echo.leave(`user.${connectedUserId.current}`);
+    }
+
+    connectedUserId.current = userId;
     const channelName = `user.${userId}`;
     const channel = echo.private(channelName);
 
@@ -102,6 +113,9 @@ export function useRealtimeUserChannel(userId?: number | null): void {
       channel.stopListening(".message.sent", onMessageSent);
       channel.stopListening(".notification.created", onNotificationCreated);
       echo.leave(channelName);
+      if (connectedUserId.current === userId) {
+        connectedUserId.current = null;
+      }
     };
-  }, [queryClient, userId]);
+  }, [userId]); // ← Seule dépendance : userId
 }

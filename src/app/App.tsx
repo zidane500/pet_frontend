@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { useAuth } from "../hooks/useAuth";
+import { useAuthInit } from "../hooks/useAuthInit";
 import { useRealtimeUserChannel } from "../hooks/useRealtimeUserChannel";
 import { Navbar } from "./components/sections/Navbar";
 import { HeroSection } from "./components/sections/HeroSection";
@@ -20,13 +21,6 @@ import { AppDownload } from "./components/sections/AppDownload";
 import { Footer } from "./components/sections/Footer";
 import { MobileBottomNav } from "./components/sections/MobileBottomNav";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Convertit l'ancien système de navigation (page + params)
- * vers des URLs React Router.
- * Utilisé pour les composants homepage qui passent encore onNavigate.
- */
 function pageToPath(page: string, params?: Record<string, string>): string {
   switch (page) {
     case "home":
@@ -76,9 +70,10 @@ function pageToPath(page: string, params?: Record<string, string>): string {
   }
 }
 
-// ─── App Layout ───────────────────────────────────────────────────────────────
-
 export default function App() {
+  // ← Initialisation auth (une seule fois après hydratation)
+  useAuthInit();
+
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,27 +81,33 @@ export default function App() {
 
   const isHomePage = location.pathname === "/";
 
-  // Realtime WebSocket
+  // ← WebSocket : se connecte seulement quand user.id change
   useRealtimeUserChannel(isLoggedIn ? (user?.id ?? null) : null);
 
-  // Thème
+  // ← Thème : exécuté une seule fois
   useEffect(() => {
     const saved = localStorage.getItem("petconnect-theme");
     if (saved === "dark") document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, []);
 
-  // Direction RTL/LTR selon la langue
+  // ← Direction RTL/LTR : ne change que si la langue change réellement
   useEffect(() => {
-    const isAr = i18n.language === "ar";
-    document.documentElement.setAttribute("dir", isAr ? "rtl" : "ltr");
-    document.documentElement.setAttribute("lang", i18n.language);
-    document.body.style.fontFamily = isAr
-      ? "'Cairo', 'Inter', system-ui, sans-serif"
-      : "'Inter', system-ui, sans-serif";
+    const currentLang = i18n.language || "fr";
+    const currentDir = document.documentElement.getAttribute("dir");
+    const targetDir = currentLang === "ar" ? "rtl" : "ltr";
+
+    // Ne change que si nécessaire
+    if (currentDir === targetDir) return;
+
+    document.documentElement.setAttribute("dir", targetDir);
+    document.documentElement.setAttribute("lang", currentLang);
+    document.body.style.fontFamily =
+      currentLang === "ar"
+        ? "'Cairo', 'Inter', system-ui, sans-serif"
+        : "'Inter', system-ui, sans-serif";
   }, [i18n.language]);
 
-  // Adaptateur : ancien format onNavigate → React Router navigate
   const handleNavigate = useCallback(
     (page: string, params?: Record<string, string>) => {
       navigate(pageToPath(page, params));
@@ -114,12 +115,11 @@ export default function App() {
     [navigate],
   );
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     navigate("/");
-  };
+  }, [logout, navigate]);
 
-  // ── Page d'accueil ──────────────────────────────────────────
   if (isHomePage) {
     return (
       <div className="min-h-screen bg-white dark:bg-[#060C12] overflow-x-hidden">
@@ -157,8 +157,5 @@ export default function App() {
     );
   }
 
-  // ── Toutes les autres pages — layout minimal ────────────────
-  // Les pages enfants sont rendues via <Outlet />
-  // Chaque page gère sa propre Navbar si nécessaire
   return <Outlet />;
 }

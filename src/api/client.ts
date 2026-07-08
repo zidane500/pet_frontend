@@ -9,7 +9,7 @@ const client = axios.create({
   withCredentials: false,
 });
 
-// Injecter le token automatiquement depuis sessionStorage
+// Injecter le token depuis sessionStorage
 client.interceptors.request.use((config) => {
   const raw = sessionStorage.getItem("petconnect_user");
   if (raw) {
@@ -20,7 +20,7 @@ client.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch {
-      // ignore si le JSON est corrompu
+      // ignore
     }
   }
   return config;
@@ -30,14 +30,10 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status = error.response?.status;
-
-    if (status === 401) {
-      // Token expiré ou invalide → nettoyer sessionStorage et rediriger
+    if (error.response?.status === 401) {
       sessionStorage.removeItem("petconnect_user");
-      window.location.href = "/";
+      window.location.href = "/login";
     }
-
     return Promise.reject(error);
   },
 );

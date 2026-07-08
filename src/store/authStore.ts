@@ -6,13 +6,14 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isLoggedIn: boolean;
+  isHydrated: boolean; // ← Nouveau : évite les re-renders pendant l'hydratation
   setAuth: (user: User, token: string) => void;
   updateUser: (user: User) => void;
   logout: () => void;
+  setHydrated: () => void;
 }
 
-// ── Nettoyage des anciens tokens localStorage (sécurité migration) ──
-// Supprime les anciennes clés si elles existent encore sur le navigateur
+// Nettoyage anciens localStorage
 if (typeof window !== "undefined") {
   localStorage.removeItem("petconnect_token");
   localStorage.removeItem("petconnect_user");
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isLoggedIn: false,
+      isHydrated: false, // ← Commence à false
 
       setAuth: (user, token) => {
         set({ user, token, isLoggedIn: true });
@@ -36,15 +38,23 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({ user: null, token: null, isLoggedIn: false });
       },
+
+      setHydrated: () => {
+        set({ isHydrated: true });
+      },
     }),
     {
       name: "petconnect_user",
-      storage: createJSONStorage(() => sessionStorage), // ← sessionStorage ici
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         user: state.user,
         token: state.token,
         isLoggedIn: state.isLoggedIn,
       }),
+      onRehydrateStorage: () => (state) => {
+        // ← Appelé après l'hydratation complète
+        state?.setHydrated();
+      },
     },
   ),
 );
