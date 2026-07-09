@@ -1,11 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { userApi } from "../api/user";
+import { useAuthStore } from "../store/authStore";
 
 export function useNotifications() {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
   return useQuery({
     queryKey: ["notifications"],
     queryFn: userApi.getNotifications,
-    refetchInterval: 30_000,
+    // ← Ne s'exécute (et ne fait du polling) que si l'utilisateur est
+    // connecté. Avant ce garde-fou, cette requête tournait même sans
+    // connexion et renvoyait des 401 en boucle.
+    enabled: isLoggedIn,
+    refetchInterval: isLoggedIn ? 30_000 : false,
     staleTime: 10_000,
   });
 }

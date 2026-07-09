@@ -1,10 +1,11 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { useAuth } from "../hooks/useAuth";
 import { useAuthInit } from "../hooks/useAuthInit";
 import { useRealtimeUserChannel } from "../hooks/useRealtimeUserChannel";
+import { useAuthStore } from "../store/authStore";
 import { Navbar } from "./components/sections/Navbar";
 import { HeroSection } from "./components/sections/HeroSection";
 import { StatsBar } from "./components/sections/StatsBar";
@@ -78,11 +79,39 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isLoggedIn, logout } = useAuth();
+  const storeLogout = useAuthStore((state) => state.logout);
 
   const isHomePage = location.pathname === "/";
 
   // ← WebSocket : se connecte seulement quand user.id change
   useRealtimeUserChannel(isLoggedIn ? (user?.id ?? null) : null);
+
+  // ← Ref pour connaître le chemin actuel sans re-créer l'écouteur ci-dessous
+  const pathnameRef = useRef(location.pathname);
+  useEffect(() => {
+    pathnameRef.current = location.pathname;
+  }, [location.pathname]);
+
+  // ← Écoute l'événement émis par api/client.ts quand une requête renvoie
+  // 401 (session expirée / token invalide). On déconnecte proprement côté
+  // store puis on navigue en SPA vers /login — SANS recharger la page.
+  // C'est ce qui remplace l'ancien `window.location.href = "/login"` qui
+  // provoquait la boucle de rechargement infinie.
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      storeLogout();
+
+      const current = pathnameRef.current;
+      if (current !== "/login" && current !== "/register") {
+        navigate("/login", { replace: true });
+      }
+    };
+
+    window.addEventListener("auth:session-expired", handleSessionExpired);
+    return () => {
+      window.removeEventListener("auth:session-expired", handleSessionExpired);
+    };
+  }, [navigate, storeLogout]);
 
   // ← Thème : exécuté une seule fois
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useAuthStore } from "../store/authStore";
 import { authApi } from "../api/auth";
+import { resetSessionExpiredFlag } from "../api/client";
 
 export function useAuth() {
   const setAuth = useAuthStore((state) => state.setAuth);
@@ -13,6 +14,9 @@ export function useAuth() {
     async (email: string, password: string) => {
       const data = await authApi.login({ email, password });
       setAuth(data.user, data.token);
+      // ← Réarme la détection d'expiration de session pour cette nouvelle
+      // connexion (voir api/client.ts : sessionExpiredHandled)
+      resetSessionExpiredFlag();
       return data.user;
     },
     [setAuth],
@@ -30,6 +34,7 @@ export function useAuth() {
     }) => {
       const data = await authApi.register(formData);
       setAuth(data.user, data.token);
+      resetSessionExpiredFlag();
       return data.user;
     },
     [setAuth],

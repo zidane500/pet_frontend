@@ -1,21 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { messagesApi, type SendMessagePayload } from "../api/messages";
+import { useAuthStore } from "../store/authStore";
 
 export function useConversations() {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
   return useQuery({
     queryKey: ["conversations"],
     queryFn: messagesApi.getConversations,
-    refetchInterval: 15_000,
+    // ← Ne s'exécute (et ne fait du polling) que si l'utilisateur est
+    // connecté. Avant ce garde-fou, cette requête tournait même sans
+    // connexion et renvoyait des 401 en boucle.
+    enabled: isLoggedIn,
+    refetchInterval: isLoggedIn ? 15_000 : false,
     staleTime: 5_000,
   });
 }
 
 export function useConversation(userId?: number | null) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const hasValidUserId = Number.isFinite(userId) && Number(userId) > 0;
+  const enabled = isLoggedIn && hasValidUserId;
+
   return useQuery({
     queryKey: ["conversation", userId],
     queryFn: () => messagesApi.getConversation(Number(userId)),
-    enabled: Number.isFinite(userId) && Number(userId) > 0,
-    refetchInterval: 10_000,
+    enabled,
+    refetchInterval: enabled ? 10_000 : false,
     staleTime: 3_000,
   });
 }

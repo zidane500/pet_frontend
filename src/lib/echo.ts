@@ -25,8 +25,26 @@ function toError(error: unknown): Error {
   return new Error("Broadcasting authentication failed.");
 }
 
+// ⚠️ Le store d'auth (authStore.ts) persiste dans sessionStorage sous la
+// clé "petconnect_user" (via zustand/persist), pas dans localStorage sous
+// "petconnect_token". L'ancienne version de cette fonction lisait la
+// mauvaise clé/storage : le token était donc toujours `null` et le
+// WebSocket ne se connectait jamais. On lit ici la même source que
+// api/client.ts pour rester cohérent.
+function getStoredToken(): string | null {
+  const raw = sessionStorage.getItem("petconnect_user");
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function getEcho(): ReverbEcho | null {
-  const token = localStorage.getItem("petconnect_token");
+  const token = getStoredToken();
   const key = envString(import.meta.env.VITE_REVERB_APP_KEY);
 
   if (!token || !key) return null;
