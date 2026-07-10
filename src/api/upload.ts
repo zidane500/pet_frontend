@@ -8,7 +8,8 @@ export const uploadApi = {
       | "avatars"
       | "vets"
       | "stores"
-      | "lost-found" = "listings",
+      | "lost-found"
+      | "products" = "listings",
   ): Promise<{ url: string; path: string }> => {
     const formData = new FormData();
     formData.append("file", file);

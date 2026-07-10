@@ -1,5 +1,13 @@
 import client from "./client";
-import type { User, Listing, PaginatedResponse } from "../types";
+import type {
+  User,
+  Listing,
+  Product,
+  ProductCategory,
+  Order,
+  OrderStatus,
+  PaginatedResponse,
+} from "../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +45,31 @@ export interface AdminListingFilters {
   is_active?: boolean;
   page?: number;
   per_page?: number;
+}
+
+export interface AdminProductFilters {
+  search?: string;
+  category?: ProductCategory;
+  status?: "active" | "inactive";
+  page?: number;
+  per_page?: number;
+}
+
+export interface AdminOrderFilters {
+  search?: string;
+  status?: OrderStatus;
+  page?: number;
+  per_page?: number;
+}
+
+export interface ProductPayload {
+  name: string;
+  description?: string;
+  category: ProductCategory;
+  price: number;
+  stock_quantity: number;
+  photos?: string[];
+  is_active?: boolean;
 }
 
 export interface CreateUserPayload {
@@ -139,6 +172,55 @@ export const adminApi = {
     id: number,
   ): Promise<{ message: string; is_active: boolean }> => {
     const res = await client.patch(`/admin/listings/${id}/toggle`);
+    return res.data;
+  },
+
+  // Produits (boutique)
+  getProducts: async (
+    filters?: AdminProductFilters,
+  ): Promise<PaginatedResponse<Product>> => {
+    const res = await client.get("/admin/products", { params: filters });
+    return res.data;
+  },
+
+  createProduct: async (payload: ProductPayload): Promise<Product> => {
+    const res = await client.post("/admin/products", payload);
+    return res.data;
+  },
+
+  updateProduct: async (
+    id: number,
+    payload: Partial<ProductPayload>,
+  ): Promise<Product> => {
+    const res = await client.put(`/admin/products/${id}`, payload);
+    return res.data;
+  },
+
+  toggleProduct: async (
+    id: number,
+  ): Promise<{ message: string; is_active: boolean }> => {
+    const res = await client.patch(`/admin/products/${id}/toggle`);
+    return res.data;
+  },
+
+  deleteProduct: async (id: number): Promise<{ message: string }> => {
+    const res = await client.delete(`/admin/products/${id}`);
+    return res.data;
+  },
+
+  // Commandes
+  getOrders: async (
+    filters?: AdminOrderFilters,
+  ): Promise<PaginatedResponse<Order>> => {
+    const res = await client.get("/admin/orders", { params: filters });
+    return res.data;
+  },
+
+  updateOrderStatus: async (
+    id: number,
+    payload: { status: OrderStatus; admin_notes?: string },
+  ): Promise<{ message: string; order: Order }> => {
+    const res = await client.patch(`/admin/orders/${id}/status`, payload);
     return res.data;
   },
 };

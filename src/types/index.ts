@@ -199,3 +199,69 @@ export interface DashboardData {
   views_by_listing: DashboardChartPoint[];
   messages_by_day: DashboardChartPoint[];
 }
+
+// ─────────────────────────────────────────────────────────────
+//  BOUTIQUE (produits créés par l'admin uniquement)
+// ─────────────────────────────────────────────────────────────
+
+export type ProductCategory = "chat" | "chien" | "oiseau" | "autre";
+
+export interface Product {
+  id: number;
+  created_by: number;
+  name: string;
+  description?: string | null;
+  category: ProductCategory;
+  price: number | string;
+  stock_quantity: number;
+  photos?: string[] | null;
+  is_active: boolean;
+  views_count: number;
+  created_at: string;
+}
+
+export type OrderStatus =
+  | "pending"
+  | "confirmed"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  product_id?: number | null;
+  product_name: string;
+  unit_price: number | string;
+  quantity: number;
+  subtotal: number | string;
+  product?: Pick<Product, "id" | "name" | "photos"> | null;
+}
+
+export interface Order {
+  id: number;
+  user_id: number;
+  status: OrderStatus;
+  total_amount: number | string;
+  shipping_name: string;
+  shipping_phone: string;
+  shipping_address: string;
+  shipping_city: string;
+  notes?: string | null;
+  admin_notes?: string | null;
+  created_at: string;
+  items?: OrderItem[];
+  user?: Pick<User, "id" | "name" | "email" | "phone">;
+}
+
+// ← Le panier vit uniquement côté client (localStorage), pas en base,
+// tant que la commande n'est pas passée. Fonctionne donc pour un
+// visiteur non connecté.
+export interface CartItem {
+  productId: number;
+  name: string;
+  price: number;
+  photo?: string | null;
+  quantity: number;
+  stockQuantity: number;
+}

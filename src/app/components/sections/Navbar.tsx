@@ -63,6 +63,7 @@ export function Navbar({
 
   const NAV_LINKS = [
     { key: "listings", emoji: "📋", page: "search" },
+    { key: "boutique", emoji: "🛍️", page: "boutique" },
     { key: "vets", emoji: "🏥", page: "vets" },
     { key: "stores", emoji: "🏪", page: "stores" },
     { key: "community", emoji: "🐾", page: "feed" },

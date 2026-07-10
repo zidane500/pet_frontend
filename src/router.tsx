@@ -33,6 +33,8 @@ import { ContactPage } from "./app/pages/ContactPage";
 import { NotFoundPage } from "./app/pages/NotFoundPage";
 import { RequireAdmin } from "./guards/RequireAdmin";
 import { AdminPage } from "./app/pages/AdminPage";
+import { BoutiquePage } from "./app/pages/BoutiquePage";
+import { CartPage } from "./app/pages/CartPage";
 
 // ─── Convertisseur page → URL ─────────────────────────────────
 
@@ -70,6 +72,10 @@ function pageToPath(page: string, params?: Record<string, string>): string {
       return `/stores/${params?.id ?? ""}`;
     case "shelter-profile":
       return `/shelters/${params?.id ?? ""}`;
+    case "boutique":
+      return "/boutique";
+    case "cart":
+      return "/panier";
     case "faq":
       return "/faq";
     case "contact":
@@ -165,6 +171,16 @@ function ProfilePageWrapper() {
 function FeedPageWrapper() {
   const { goBack } = usePageNav();
   return <FeedPage onBack={goBack} />;
+}
+
+function BoutiquePageWrapper() {
+  const { goBack, onNavigate } = usePageNav();
+  return <BoutiquePage onBack={goBack} onNavigate={onNavigate} />;
+}
+
+function CartPageWrapper() {
+  const { goBack } = usePageNav();
+  return <CartPage onBack={goBack} />;
 }
 
 function DashboardPageWrapper() {
@@ -295,6 +311,12 @@ export const router = createBrowserRouter([
       { path: "shelters/:id", element: <ShelterProfilePageWrapper /> },
       { path: "profile/:id", element: <ProfilePageWrapper /> },
       { path: "profile", element: <ProfilePageWrapper /> },
+      { path: "boutique", element: <BoutiquePageWrapper /> },
+      // ← Le panier reste PUBLIC (pas de RequireAuth) : un visiteur
+      // doit pouvoir voir/modifier son panier sans compte. Seule la
+      // soumission de la commande (dans CartPage) le redirige vers
+      // /register si besoin.
+      { path: "panier", element: <CartPageWrapper /> },
 
       // ── Routes Guest (non connecté seulement) ───────────────
       {

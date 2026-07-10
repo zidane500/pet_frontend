@@ -1,6 +1,7 @@
 const en = {
   nav: {
     listings: "Listings",
+    boutique: "Shop",
     adoption: "Adoption",
     lostFound: "Lost & Found",
     vets: "Veterinarians",

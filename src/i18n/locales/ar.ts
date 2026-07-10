@@ -1,6 +1,7 @@
 const ar = {
   nav: {
     listings: "الإعلانات",
+    boutique: "المتجر",
     adoption: "التبني",
     lostFound: "المفقود والموجود",
     vets: "الأطباء البيطريون",

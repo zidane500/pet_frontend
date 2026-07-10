@@ -3,9 +3,13 @@ import {
   adminApi,
   type AdminUserFilters,
   type AdminListingFilters,
+  type AdminProductFilters,
+  type AdminOrderFilters,
   type CreateUserPayload,
   type UpdateUserPayload,
+  type ProductPayload,
 } from "../api/admin";
+import type { OrderStatus } from "../types";
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
@@ -129,6 +133,95 @@ export function useAdminToggleListing() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "listings"] });
       queryClient.invalidateQueries({ queryKey: ["listings"] });
+    },
+  });
+}
+
+// ─── Produits (boutique) ────────────────────────────────────────────────────
+
+export function useAdminProducts(filters?: AdminProductFilters) {
+  return useQuery({
+    queryKey: ["admin", "products", filters],
+    queryFn: () => adminApi.getProducts(filters),
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useAdminCreateProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ProductPayload) => adminApi.createProduct(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      // ← Le catalogue public doit aussi voir le nouveau produit
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useAdminUpdateProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: Partial<ProductPayload>;
+    }) => adminApi.updateProduct(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useAdminToggleProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => adminApi.toggleProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+export function useAdminDeleteProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => adminApi.deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
+// ─── Commandes ───────────────────────────────────────────────────────────────
+
+export function useAdminOrders(filters?: AdminOrderFilters) {
+  return useQuery({
+    queryKey: ["admin", "orders", filters],
+    queryFn: () => adminApi.getOrders(filters),
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useAdminUpdateOrderStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      admin_notes,
+    }: {
+      id: number;
+      status: OrderStatus;
+      admin_notes?: string;
+    }) => adminApi.updateOrderStatus(id, { status, admin_notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
     },
   });
 }
