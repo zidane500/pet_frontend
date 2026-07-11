@@ -71,6 +71,13 @@ type AdminTab = "overview" | "users" | "listings" | "products" | "orders";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function isPromotionActive(product: Product): boolean {
+  if (!product.promotion_price || Number(product.promotion_price) <= 0)
+    return false;
+  if (!product.promotion_ends_at) return true;
+  return new Date(product.promotion_ends_at) > new Date();
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / 86_400_000);
@@ -1358,6 +1365,10 @@ function ProductFormModal({
     description: product?.description ?? "",
     category: product?.category ?? "autre",
     price: product?.price?.toString() ?? "",
+    promotion_price: product?.promotion_price?.toString() ?? "",
+    promotion_ends_at: product?.promotion_ends_at
+      ? new Date(product.promotion_ends_at).toISOString().slice(0, 16)
+      : "",
     stock_quantity: product?.stock_quantity?.toString() ?? "",
     is_active: product?.is_active ?? true,
   });
@@ -1372,6 +1383,10 @@ function ProductFormModal({
       description: product?.description ?? "",
       category: product?.category ?? "autre",
       price: product?.price?.toString() ?? "",
+      promotion_price: product?.promotion_price?.toString() ?? "",
+      promotion_ends_at: product?.promotion_ends_at
+        ? new Date(product.promotion_ends_at).toISOString().slice(0, 16)
+        : "",
       stock_quantity: product?.stock_quantity?.toString() ?? "",
       is_active: product?.is_active ?? true,
     });
@@ -1429,6 +1444,12 @@ function ProductFormModal({
       description: form.description || undefined,
       category: form.category as Product["category"],
       price,
+      promotion_price: form.promotion_price
+        ? parseFloat(form.promotion_price)
+        : null,
+      promotion_ends_at: form.promotion_ends_at
+        ? new Date(form.promotion_ends_at).toISOString()
+        : null,
       stock_quantity: stock,
       photos,
       is_active: form.is_active,
@@ -1536,6 +1557,31 @@ function ProductFormModal({
                     min="0"
                     value={form.stock_quantity}
                     onChange={(e) => set("stock_quantity", e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-[var(--pc-text-primary)] text-sm focus:outline-none focus:border-[var(--pc-primary)] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                    Prix promo (DT)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.promotion_price}
+                    onChange={(e) => set("promotion_price", e.target.value)}
+                    placeholder="Prix réduit"
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-[var(--pc-text-primary)] text-sm focus:outline-none focus:border-[var(--pc-primary)] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                    Fin de promo
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={form.promotion_ends_at}
+                    onChange={(e) => set("promotion_ends_at", e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-[var(--pc-text-primary)] text-sm focus:outline-none focus:border-[var(--pc-primary)] transition-colors"
                   />
                 </div>
@@ -1848,8 +1894,22 @@ function ProductsTab({
                         {p.category}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs font-bold text-[var(--pc-primary)]">
-                      {Number(p.price).toLocaleString("fr-TN")} DT
+                    <td className="px-4 py-3">
+                      {isPromotionActive(p) ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-red-500">
+                            {Number(p.promotion_price).toLocaleString("fr-TN")}{" "}
+                            DT
+                          </span>
+                          <span className="text-[10px] text-[var(--pc-text-secondary)] line-through">
+                            {Number(p.price).toLocaleString("fr-TN")} DT
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-bold text-[var(--pc-primary)]">
+                          {Number(p.price).toLocaleString("fr-TN")} DT
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-[var(--pc-text-secondary)]">
                       {p.stock_quantity}
@@ -2246,9 +2306,6 @@ export function AdminPage() {
               <h1 className="font-black text-[var(--pc-text-primary)] text-sm leading-none">
                 Panel Admin
               </h1>
-              <p className="text-[10px] text-[var(--pc-text-secondary)]">
-                Animali.tn — Accès restreint
-              </p>
             </div>
           </div>
 

@@ -100,6 +100,29 @@ function getProductImages(product: ProductDetails): string[] {
     .filter((u): u is string => Boolean(u));
 }
 
+function isPromotionActive(product: ProductDetails): boolean {
+  if (!product.promotion_price || Number(product.promotion_price) <= 0)
+    return false;
+  if (!product.promotion_ends_at) return true;
+  return new Date(product.promotion_ends_at) > new Date();
+}
+
+function getDisplayPrice(product: ProductDetails): {
+  current: number;
+  original: number | null;
+  isPromo: boolean;
+} {
+  const original = Number(product.price ?? 0);
+  if (isPromotionActive(product)) {
+    return {
+      current: Number(product.promotion_price!),
+      original,
+      isPromo: true,
+    };
+  }
+  return { current: original, original: null, isPromo: false };
+}
+
 /** Sliding window pagination */
 function getVisiblePages(
   current: number,
@@ -288,6 +311,15 @@ function ProductCard({
           {p.category ?? "Autre"}
         </span>
 
+        {(() => {
+          const { isPromo } = getDisplayPrice(p);
+          return isPromo ? (
+            <span className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-red-500/30">
+              PROMO
+            </span>
+          ) : null;
+        })()}
+
         {images.length > 0 && !isOutOfStock && (
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
             <div className="w-10 h-10 rounded-full bg-white/90 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg">
@@ -311,15 +343,31 @@ function ProductCard({
 
         {/* Price + Counter/Status + Add */}
         <div className="mt-auto flex items-center justify-between gap-2">
-          <span
-            className={`font-bold text-sm sm:text-base whitespace-nowrap ${
-              isOutOfStock
-                ? "text-red-400 line-through"
-                : "text-[var(--pc-primary)]"
-            }`}
-          >
-            {p.price} DT
-          </span>
+          <div className="flex items-center gap-1.5">
+            {(() => {
+              const { current, original, isPromo } = getDisplayPrice(p);
+              return (
+                <>
+                  <span
+                    className={`font-bold text-sm sm:text-base whitespace-nowrap ${
+                      isOutOfStock
+                        ? "text-red-400 line-through"
+                        : isPromo
+                          ? "text-red-500"
+                          : "text-[var(--pc-primary)]"
+                    }`}
+                  >
+                    {current} DT
+                  </span>
+                  {isPromo && original && (
+                    <span className="text-xs text-[var(--pc-text-secondary)] line-through">
+                      {original} DT
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+          </div>
 
           {isOutOfStock ? (
             <span className="px-6 py-1.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide">
@@ -559,19 +607,45 @@ function ProductModal({
               <h2 className="text-xl sm:text-2xl font-bold text-[var(--pc-text-primary)] mb-1">
                 {p.name}
               </h2>
-              <span className="inline-block px-2.5 py-1 rounded-lg bg-[var(--pc-primary)]/10 text-[var(--pc-primary)] text-xs font-bold uppercase tracking-wider">
-                {p.category ?? "Produit"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-block px-2.5 py-1 rounded-lg bg-[var(--pc-primary)]/10 text-[var(--pc-primary)] text-xs font-bold uppercase tracking-wider">
+                  {p.category ?? "Produit"}
+                </span>
+                {(() => {
+                  const { isPromo } = getDisplayPrice(p);
+                  return isPromo ? (
+                    <span className="inline-block px-2.5 py-1 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold uppercase tracking-wider">
+                      PROMOTION
+                    </span>
+                  ) : null;
+                })()}
+              </div>
             </div>
-            <span
-              className={`text-2xl font-bold whitespace-nowrap ${
-                isOutOfStock
-                  ? "text-red-400 line-through"
-                  : "text-[var(--pc-primary)]"
-              }`}
-            >
-              {p.price} DT
-            </span>
+            <div className="text-right">
+              {(() => {
+                const { current, original, isPromo } = getDisplayPrice(p);
+                return (
+                  <>
+                    <span
+                      className={`text-2xl font-bold whitespace-nowrap ${
+                        isOutOfStock
+                          ? "text-red-400 line-through"
+                          : isPromo
+                            ? "text-red-500"
+                            : "text-[var(--pc-primary)]"
+                      }`}
+                    >
+                      {current} DT
+                    </span>
+                    {isPromo && original && (
+                      <p className="text-sm text-[var(--pc-text-secondary)] line-through">
+                        {original} DT
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
 
           {desc && (

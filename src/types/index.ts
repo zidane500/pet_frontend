@@ -213,6 +213,8 @@ export interface Product {
   description?: string | null;
   category: ProductCategory;
   price: number | string;
+  promotion_price?: number | string | null;
+  promotion_ends_at?: string | null;
   stock_quantity: number;
   photos?: string[] | null;
   is_active: boolean;

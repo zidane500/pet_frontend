@@ -56,6 +56,10 @@ function pageToPath(page: string, params?: Record<string, string>): string {
       return `/stores/${params?.id ?? ""}`;
     case "shelter-profile":
       return `/shelters/${params?.id ?? ""}`;
+    case "boutique":
+      return "/boutique";
+    case "cart":
+      return "/panier";
     case "faq":
       return "/faq";
     case "contact":
