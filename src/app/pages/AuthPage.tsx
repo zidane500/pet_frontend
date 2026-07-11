@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { authApi } from "../../api/auth";
 import {
   Mail,
   Lock,
@@ -26,7 +27,11 @@ type AuthView =
   | "reset";
 
 export interface AuthPageProps {
-  initialView?: "login" | "register";
+  initialView?: "login" | "register" | "reset";
+  // ← Fournis uniquement quand initialView === "reset" (lien reçu par
+  // email : /reset-password?token=...&email=...)
+  resetToken?: string;
+  resetEmail?: string;
   onSuccess: (user: { name: string; role: string }) => void;
   onNavigate: (page: string, params?: Record<string, string>) => void;
   onLogin?: (email: string, password: string) => Promise<any>;
@@ -1102,7 +1107,15 @@ function ForgotView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
     }
     setEmailError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      await authApi.forgotPassword(email);
+    } catch {
+      // ← Par sécurité, on ne révèle jamais si l'email existe ou non
+      // (ça évite qu'une personne malveillante devine quels emails
+      // sont inscrits sur le site). On affiche donc le même message de
+      // succès même en cas d'erreur venant du serveur — SAUF si c'est
+      // une vraie erreur réseau, gérée séparément ci-dessous.
+    }
     setLoading(false);
     setSent(true);
   }, [email]);
@@ -1176,16 +1189,31 @@ function ForgotView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
 
 // ─── RESET PASSWORD ───────────────────────────────────────────────────────────
 
-function ResetView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
+function ResetView({
+  token,
+  email,
+  onSwitch,
+}: {
+  token?: string;
+  email?: string;
+  onSwitch: (v: AuthView) => void;
+}) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [serverError, setServerError] = useState("");
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>(
     {},
   );
+
+  // ← Si quelqu'un arrive sur cette vue sans lien valide (token/email
+  // manquants — lien copié à moitié, lien déjà utilisé et la page
+  // rouverte plus tard, etc.), on ne montre pas un formulaire qui
+  // échouera de toute façon : on l'explique clairement tout de suite.
+  const linkIsInvalid = !token || !email;
 
   const handleSubmit = useCallback(async () => {
     const newErrors: typeof errors = {};
@@ -1195,12 +1223,29 @@ function ResetView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
       newErrors.confirm = "Les mots de passe ne correspondent pas";
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
+
+    setServerError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setLoading(false);
-    setSuccess(true);
-    setTimeout(() => onSwitch("login"), 2000);
-  }, [password, confirmPassword, onSwitch]);
+    try {
+      await authApi.resetPassword({
+        token: token!,
+        email: email!,
+        password,
+        password_confirmation: confirmPassword,
+      });
+      setLoading(false);
+      setSuccess(true);
+      setTimeout(() => onSwitch("login"), 2000);
+    } catch (err: any) {
+      setLoading(false);
+      // ← Cas le plus courant : le lien a expiré (60 min) ou a déjà
+      // été utilisé une première fois.
+      setServerError(
+        err?.response?.data?.message ??
+          "Ce lien de réinitialisation est invalide ou a expiré. Merci d'en redemander un nouveau.",
+      );
+    }
+  }, [password, confirmPassword, onSwitch, token, email]);
 
   if (success) {
     return (
@@ -1227,6 +1272,32 @@ function ResetView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
         </div>
         <Loader2 size={20} className="animate-spin text-[#1D7D5F]" />
       </motion.div>
+    );
+  }
+
+  if (linkIsInvalid) {
+    return (
+      <div className="flex flex-col items-center text-center gap-5 py-8">
+        <div className="w-20 h-20 rounded-full bg-red-500/15 flex items-center justify-center">
+          <AlertCircle size={40} className="text-red-500" />
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-[var(--pc-text-primary)]">
+            Lien invalide
+          </h2>
+          <p className="text-[var(--pc-text-secondary)] text-sm mt-2 leading-relaxed max-w-xs mx-auto">
+            Ce lien de réinitialisation est incomplet ou invalide. Merci de
+            redemander un nouveau lien.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSwitch("forgot")}
+          className="text-[#1D7D5F] font-semibold hover:underline text-sm"
+        >
+          Redemander un lien
+        </button>
+      </div>
     );
   }
 
@@ -1276,6 +1347,9 @@ function ResetView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
           </button>
         }
       />
+      {serverError && (
+        <p className="text-red-500 text-sm text-center">{serverError}</p>
+      )}
       <GradientButton onClick={handleSubmit} loading={loading}>
         Réinitialiser
       </GradientButton>
@@ -1287,6 +1361,8 @@ function ResetView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
 
 export function AuthPage({
   initialView = "login",
+  resetToken,
+  resetEmail,
   onSuccess,
   onNavigate: _onNavigate,
   onLogin,
@@ -1296,7 +1372,11 @@ export function AuthPage({
   const isRtl = i18n.language === "ar";
 
   const startView: AuthView =
-    initialView === "register" ? "register-step1" : "login";
+    initialView === "register"
+      ? "register-step1"
+      : initialView === "reset"
+        ? "reset"
+        : "login";
   const [view, setView] = useState<AuthView>(startView);
   const [selectedRole, setSelectedRole] = useState("");
   const [prevView, setPrevView] = useState<AuthView>(startView);
@@ -1383,7 +1463,13 @@ export function AuthPage({
                 />
               )}
               {view === "forgot" && <ForgotView onSwitch={handleSwitch} />}
-              {view === "reset" && <ResetView onSwitch={handleSwitch} />}
+              {view === "reset" && (
+                <ResetView
+                  token={resetToken}
+                  email={resetEmail}
+                  onSwitch={handleSwitch}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Minus, Plus, Trash2, Info, X as XIcon } from "lucide-react";
 import { useCartStore } from "../../store/cartStore";
 import { useAuthStore } from "../../store/authStore";
 import { useCreateOrder } from "../../hooks/useOrders";
+import { productsApi } from "../../api/products";
+import type { Product } from "../../types";
 
 interface CartPageProps {
   onBack: () => void;
@@ -40,6 +42,62 @@ export function CartPage({ onBack }: CartPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [lastPhone, setLastPhone] = useState("");
+
+  // ← Notifie le client si un prix a changé (promotion, etc.) ou si un
+  // produit du panier n'est plus disponible.
+  const [syncNotice, setSyncNotice] = useState<{
+    priceChanged: {
+      productId: number;
+      name: string;
+      oldPrice: number;
+      newPrice: number;
+    }[];
+    removed: { productId: number; name: string }[];
+  } | null>(null);
+
+  // ← BUG CORRIGÉ : le panier stockait un prix figé au moment de
+  // l'ajout, jamais revérifié. Ici, dès l'ouverture de /panier, on
+  // redemande le prix ACTUEL de chaque produit au serveur et on met à
+  // jour le panier en conséquence (et on retire les produits qui ne
+  // sont plus disponibles).
+  useEffect(() => {
+    const initialItems = useCartStore.getState().items;
+    if (initialItems.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const results = await Promise.allSettled(
+        initialItems.map((i) => productsApi.getOne(i.productId)),
+      );
+      if (cancelled) return;
+
+      const freshProducts: Product[] = [];
+      const removedIds: number[] = [];
+
+      results.forEach((result, idx) => {
+        if (result.status === "fulfilled") {
+          freshProducts.push(result.value);
+        } else {
+          // ← 404 = produit supprimé OU désactivé par l'admin
+          removedIds.push(initialItems[idx].productId);
+        }
+      });
+
+      const { priceChanged, removed } = useCartStore
+        .getState()
+        .syncWithCatalog(freshProducts, removedIds);
+
+      if (priceChanged.length > 0 || removed.length > 0) {
+        setSyncNotice({ priceChanged, removed });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ← Redirige vers l'inscription/connexion en gardant `/panier` comme
   // page de retour (même mécanisme que RequireAuth.tsx : après
@@ -109,6 +167,21 @@ export function CartPage({ onBack }: CartPageProps) {
         >
           Votre panier est vide
         </p>
+        {/* ← Si le panier vient d'être vidé par la resynchronisation
+            (dernier produit devenu indisponible), on l'explique plutôt
+            que de laisser le client perplexe. */}
+        {syncNotice && syncNotice.removed.length > 0 && (
+          <p
+            className="text-amber-600 dark:text-amber-400 max-w-xs mt-2"
+            style={{ fontSize: "12px" }}
+          >
+            {syncNotice.removed.map((r) => r.name).join(", ")} n'
+            {syncNotice.removed.length > 1 ? "étaient" : "était"} plus
+            disponible{syncNotice.removed.length > 1 ? "s" : ""} et{" "}
+            {syncNotice.removed.length > 1 ? "ont" : "a"} été retiré
+            {syncNotice.removed.length > 1 ? "s" : ""} du panier.
+          </p>
+        )}
         <button
           onClick={onBack}
           className="mt-4 px-4 py-2 bg-[var(--pc-primary)] text-white rounded-xl font-semibold"
@@ -138,6 +211,57 @@ export function CartPage({ onBack }: CartPageProps) {
       </header>
 
       <div className="p-4 space-y-3 max-w-lg mx-auto">
+        {/* ← Bannière : informe le client si un prix a changé ou si un
+            produit a été retiré (plus dispo / désactivé par l'admin) */}
+        <AnimatePresence>
+          {syncNotice && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 space-y-1.5 overflow-hidden"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <Info
+                    size={15}
+                    className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    {syncNotice.priceChanged.map((c) => (
+                      <p
+                        key={c.productId}
+                        className="text-amber-800 dark:text-amber-300"
+                        style={{ fontSize: "12px" }}
+                      >
+                        Prix de <strong>{c.name}</strong> mis à jour :{" "}
+                        {c.oldPrice.toLocaleString("fr-TN")} DT →{" "}
+                        <strong>{c.newPrice.toLocaleString("fr-TN")} DT</strong>
+                      </p>
+                    ))}
+                    {syncNotice.removed.map((r) => (
+                      <p
+                        key={r.productId}
+                        className="text-amber-800 dark:text-amber-300"
+                        style={{ fontSize: "12px" }}
+                      >
+                        <strong>{r.name}</strong> n'est plus disponible et a été
+                        retiré du panier.
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSyncNotice(null)}
+                  className="flex-shrink-0 text-amber-600 dark:text-amber-400"
+                >
+                  <XIcon size={14} />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {items.map((item) => (
             <motion.div

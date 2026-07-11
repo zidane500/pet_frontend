@@ -4,6 +4,7 @@ import {
   useNavigate,
   useParams,
   useLocation,
+  useSearchParams,
 } from "react-router-dom";
 import App from "./app/App";
 import { RequireAuth } from "./guards/RequireAuth";
@@ -277,6 +278,25 @@ function AuthPageWrapper() {
   );
 }
 
+function ResetPasswordWrapper() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // ← token et email viennent du lien reçu par email
+  // (ResetPasswordNotification.php côté backend)
+  const token = searchParams.get("token") ?? undefined;
+  const email = searchParams.get("email") ?? undefined;
+
+  return (
+    <AuthPage
+      initialView="reset"
+      resetToken={token}
+      resetEmail={email}
+      onSuccess={() => navigate("/login", { replace: true })}
+      onNavigate={(page) => navigate(pageToPath(page))}
+    />
+  );
+}
+
 function ProfileSetupPageWrapper() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -326,6 +346,11 @@ export const router = createBrowserRouter([
           { path: "register", element: <AuthPageWrapper /> },
         ],
       },
+      // ← Public, en dehors de RequireGuest : un lien de
+      // réinitialisation doit toujours s'ouvrir, même si une session
+      // (potentiellement périmée ou d'un autre compte) traîne dans le
+      // navigateur.
+      { path: "reset-password", element: <ResetPasswordWrapper /> },
 
       // ── Routes protégées (connecté obligatoire) ─────────────
       {
