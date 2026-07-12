@@ -97,6 +97,34 @@ function validateEmail(email: string): string | null {
   return null;
 }
 
+/**
+ * ← Décompte "Trop de requêtes. Réessayez dans X secondes." qui diminue
+ * tout seul chaque seconde, jusqu'à revenir à null (l'utilisateur peut
+ * alors réessayer). Utilisé par LoginView, RegisterStep2View et
+ * ForgotView.
+ */
+function useRetryCountdown(): [number | null, (seconds: number | null) => void] {
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (secondsLeft === null) return;
+    if (secondsLeft <= 0) {
+      setSecondsLeft(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSecondsLeft((s) => (s === null ? null : s - 1));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [secondsLeft]);
+
+  return [secondsLeft, setSecondsLeft];
+}
+
+function formatRetryMessage(seconds: number): string {
+  return `Trop de requêtes. Réessayez dans ${seconds} seconde${seconds > 1 ? "s" : ""}.`;
+}
+
 function getPasswordStrength(password: string): number {
   let score = 0;
   if (password.length >= 6) score++;
@@ -546,6 +574,7 @@ function LoginView({
   );
   const [globalError, setGlobalError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [retrySeconds, setRetrySeconds] = useRetryCountdown();
 
   const handleSubmit = useCallback(async () => {
     const newErrors: typeof errors = {};
@@ -567,15 +596,22 @@ function LoginView({
         onSuccess({ name: "Utilisateur", role: "owner" });
       }
     } catch (err: any) {
-      const msg =
-        err.response?.data?.errors?.email?.[0] ||
-        err.response?.data?.message ||
-        "Email ou mot de passe incorrect";
-      setGlobalError(msg);
+      if (err.response?.status === 429) {
+        // ← Cas spécifique : trop de tentatives. On démarre le
+        // décompte ; le message s'affichera et diminuera tout seul
+        // (voir le rendu plus bas et useRetryCountdown).
+        setRetrySeconds(err.response?.data?.retry_after ?? 5);
+      } else {
+        setGlobalError(
+          err.response?.data?.errors?.email?.[0] ||
+            err.response?.data?.message ||
+            "Email ou mot de passe incorrect",
+        );
+      }
     } finally {
       setLoading(false);
     }
-  }, [email, password, onSuccess, onLogin]);
+  }, [email, password, onSuccess, onLogin, setRetrySeconds]);
 
   return (
     <div className="space-y-5">
@@ -589,7 +625,7 @@ function LoginView({
       </div>
 
       <AnimatePresence>
-        {globalError && (
+        {(retrySeconds !== null || globalError) && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -597,7 +633,9 @@ function LoginView({
             className="flex items-center gap-2 bg-red-500/10 border border-red-400/30 text-red-400 text-sm rounded-xl px-4 py-3"
           >
             <AlertCircle size={16} className="shrink-0" />
-            {globalError}
+            {retrySeconds !== null
+              ? formatRetryMessage(retrySeconds)
+              : globalError}
           </motion.div>
         )}
       </AnimatePresence>
@@ -650,8 +688,12 @@ function LoginView({
         </button>
       </div>
 
-      <GradientButton onClick={handleSubmit} loading={loading}>
-        Se connecter
+      <GradientButton
+        onClick={handleSubmit}
+        loading={loading}
+        disabled={retrySeconds !== null}
+      >
+        {retrySeconds !== null ? `Réessayer dans ${retrySeconds}s` : "Se connecter"}
       </GradientButton>
 
       <div className="relative flex items-center gap-3 my-2">
@@ -834,6 +876,7 @@ function RegisterStep2View({
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [retrySeconds, setRetrySeconds] = useRetryCountdown();
 
   const strength = getPasswordStrength(password);
 
@@ -874,6 +917,13 @@ function RegisterStep2View({
         onSuccess({ name: firstName, role: selectedRole });
       }
     } catch (err: any) {
+      if (err.response?.status === 429) {
+        // ← Trop de tentatives : bannière dédiée avec décompte, pas
+        // rattachée à un champ en particulier.
+        setLoading(false);
+        setRetrySeconds(err.response?.data?.retry_after ?? 5);
+        return;
+      }
       const apiErrors = err.response?.data?.errors || {};
       const newErr: Record<string, string> = {};
       if (apiErrors.email) newErr.email = apiErrors.email[0];
@@ -901,6 +951,7 @@ function RegisterStep2View({
     selectedRole,
     onSuccess,
     onRegister,
+    setRetrySeconds,
   ]);
 
   return (
@@ -1076,8 +1127,18 @@ function RegisterStep2View({
         )}
       </div>
 
-      <GradientButton onClick={handleSubmit} loading={loading}>
-        Créer mon compte
+      {retrySeconds !== null && (
+        <p className="text-red-500 text-sm text-center">
+          {formatRetryMessage(retrySeconds)}
+        </p>
+      )}
+
+      <GradientButton
+        onClick={handleSubmit}
+        loading={loading}
+        disabled={retrySeconds !== null}
+      >
+        {retrySeconds !== null ? `Réessayer dans ${retrySeconds}s` : "Créer mon compte"}
       </GradientButton>
 
       <button
@@ -1098,6 +1159,7 @@ function ForgotView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
   const [emailError, setEmailError] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [retrySeconds, setRetrySeconds] = useRetryCountdown();
 
   const handleSubmit = useCallback(async () => {
     const err = validateEmail(email);
@@ -1109,16 +1171,24 @@ function ForgotView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
     setLoading(true);
     try {
       await authApi.forgotPassword(email);
-    } catch {
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        // ← Cas à part : "trop de requêtes" n'a rien de sensible et
+        // DOIT être affiché — ce n'est pas une info sur l'existence du
+        // compte, contrairement aux autres erreurs qu'on masque
+        // volontairement ci-dessous.
+        setLoading(false);
+        setRetrySeconds(err.response?.data?.retry_after ?? 5);
+        return;
+      }
       // ← Par sécurité, on ne révèle jamais si l'email existe ou non
       // (ça évite qu'une personne malveillante devine quels emails
-      // sont inscrits sur le site). On affiche donc le même message de
-      // succès même en cas d'erreur venant du serveur — SAUF si c'est
-      // une vraie erreur réseau, gérée séparément ci-dessous.
+      // sont inscrits sur le site) : on affiche le même message de
+      // succès même en cas d'erreur "email introuvable" côté serveur.
     }
     setLoading(false);
     setSent(true);
-  }, [email]);
+  }, [email, setRetrySeconds]);
 
   if (sent) {
     return (
@@ -1173,8 +1243,19 @@ function ForgotView({ onSwitch }: { onSwitch: (v: AuthView) => void }) {
         icon={Mail}
         error={emailError}
       />
-      <GradientButton onClick={handleSubmit} loading={loading}>
-        Envoyer le lien de récupération
+      {retrySeconds !== null && (
+        <p className="text-red-500 text-sm text-center">
+          {formatRetryMessage(retrySeconds)}
+        </p>
+      )}
+      <GradientButton
+        onClick={handleSubmit}
+        loading={loading}
+        disabled={retrySeconds !== null}
+      >
+        {retrySeconds !== null
+          ? `Réessayer dans ${retrySeconds}s`
+          : "Envoyer le lien de récupération"}
       </GradientButton>
       <button
         type="button"
