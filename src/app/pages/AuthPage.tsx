@@ -56,13 +56,6 @@ const ROLES = [
     color: "from-blue-500 to-indigo-600",
   },
   {
-    id: "shop",
-    icon: "🏪",
-    title: "Animalerie",
-    desc: "Publiez vos produits et services",
-    color: "from-amber-500 to-orange-600",
-  },
-  {
     id: "shelter",
     icon: "🏠",
     title: "Refuge / SPA",

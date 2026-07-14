@@ -1054,7 +1054,9 @@ export function BoutiquePage({ onBack, onNavigate }: BoutiquePageProps) {
                   >
                     <ProductCard
                       product={product}
-                      onOpen={setSelectedProduct}
+                      onOpen={(p) =>
+                        onNavigate("boutique-detail", { id: String(p.id) })
+                      }
                     />
                   </motion.div>
                 ))}

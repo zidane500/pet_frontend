@@ -122,6 +122,12 @@ const ar = {
     open: "مفتوح",
     closed: "مغلق",
   },
+  boutiqueSection: {
+    badge: "🛍️ المتجر",
+    title: "منتجاتنا",
+    subtitle: "إكسسوارات مختارة لرفقائك — توصيل في جميع أنحاء تونس.",
+    seeAll: "عرض المتجر بالكامل",
+  },
   community: {
     badge: "🐾 المجتمع",
     title: "مجتمع Animali",

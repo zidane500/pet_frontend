@@ -128,6 +128,13 @@ const fr = {
     open: "Ouvert",
     closed: "Fermé",
   },
+  boutiqueSection: {
+    badge: "🛍️ Boutique",
+    title: "Nos produits",
+    subtitle:
+      "Accessoires sélectionnés pour vos compagnons — livrés partout en Tunisie.",
+    seeAll: "Voir toute la boutique",
+  },
   community: {
     badge: "🐾 Communauté",
     title: "La communauté Animali",

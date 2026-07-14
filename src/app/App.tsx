@@ -14,7 +14,7 @@ import { AdoptionSpotlight } from "./components/sections/AdoptionSpotlight";
 import { LostFound } from "./components/sections/LostFound";
 import { HowItWorks } from "./components/sections/HowItWorks";
 import { VetDirectory } from "./components/sections/VetDirectory";
-import { PetStores } from "./components/sections/PetStores";
+import { BoutiqueShowcase } from "./components/sections/BoutiqueShowcase";
 import { CommunityFeed } from "./components/sections/CommunityFeed";
 import { PremiumSection } from "./components/sections/PremiumSection";
 import { TrustSafety } from "./components/sections/TrustSafety";
@@ -177,7 +177,7 @@ export default function App() {
             <LostFound onNavigate={handleNavigate} />
             <HowItWorks onNavigate={handleNavigate} />
             <VetDirectory onNavigate={handleNavigate} />
-            <PetStores onNavigate={handleNavigate} />
+            <BoutiqueShowcase onNavigate={handleNavigate} />
             <CommunityFeed onOpenFeed={() => navigate("/feed")} />
             <PremiumSection />
             <TrustSafety />

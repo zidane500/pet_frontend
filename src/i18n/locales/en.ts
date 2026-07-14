@@ -126,6 +126,13 @@ const en = {
     open: "Open",
     closed: "Closed",
   },
+  boutiqueSection: {
+    badge: "🛍️ Shop",
+    title: "Our products",
+    subtitle:
+      "Curated accessories for your companions — delivered across Tunisia.",
+    seeAll: "See the full shop",
+  },
   community: {
     badge: "🐾 Community",
     title: "The Animali community",
