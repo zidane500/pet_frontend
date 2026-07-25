@@ -47,4 +47,8 @@ export const listingsApi = {
     const res = await client.get("/my-listings");
     return res.data;
   },
+  share: async (id: number): Promise<{ shares_count: number }> => {
+    const res = await client.post(`/listings/${id}/share`);
+    return res.data;
+  },
 };

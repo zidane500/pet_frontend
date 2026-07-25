@@ -5,7 +5,6 @@ import {
   Search,
   Bell,
   Home,
-  Compass,
   Bookmark,
   MessageCircle,
   User,
@@ -14,29 +13,29 @@ import {
   PlusCircle,
   BadgeCheck,
   TrendingUp,
+  RefreshCw,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PostCard } from "../components/feed/PostCard";
 import { SkeletonPost } from "../components/feed/SkeletonPost";
 import { LangSelector } from "../components/LangSelector";
 import { ThemeToggle } from "../components/ThemeToggle";
-import {
-  MOCK_POSTS,
-  SUGGESTIONS,
-  type PostType,
-} from "../components/feed/feedData";
+import { useListings } from "../../hooks/useListings";
+import { useFollowSuggestions, useToggleFollow } from "../../hooks/useFollows";
+import { useUnreadCount } from "../../hooks/useNotifications";
+import { useAuthStore } from "../../store/authStore";
+import type { Listing } from "../../types";
 
-const FILTER_KEYS: (PostType | "all")[] = [
+// ← Uniquement les 6 vrais types de Listing (le mock en avait 3 de plus
+// qui n'existent pas dans le vrai modèle : urgence/association/vet).
+const FILTER_KEYS: (Listing["type"] | "all")[] = [
   "all",
   "adoption",
   "vente",
   "perdu",
   "trouve",
-  "urgence",
   "accouplement",
   "conseils",
-  "association",
-  "vet",
 ];
 
 const FILTER_DOTS: Record<string, string> = {
@@ -45,51 +44,69 @@ const FILTER_DOTS: Record<string, string> = {
   vente: "🔵",
   perdu: "🟠",
   trouve: "🟣",
-  urgence: "🔴",
   accouplement: "🟡",
   conseils: "💡",
-  association: "🏠",
-  vet: "🏥",
 };
 
 interface FeedPageProps {
   onBack: () => void;
+  onNavigate?: (page: string, params?: Record<string, string>) => void;
 }
 
-export function FeedPage({ onBack }: FeedPageProps) {
+export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const unreadNotifications = useUnreadCount();
 
-  const [activeFilter, setActiveFilter] = useState<PostType | "all">("all");
+  const [activeFilter, setActiveFilter] = useState<Listing["type"] | "all">(
+    "all",
+  );
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [posts, setPosts] = useState(MOCK_POSTS.slice(0, 4));
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [allPosts, setAllPosts] = useState<Listing[]>([]);
   const [allLoaded, setAllLoaded] = useState(false);
-  const [notifications, setNotifications] = useState(3);
   const [activeSidebar, setActiveSidebar] = useState("feed");
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  const filteredPosts =
-    activeFilter === "all"
-      ? posts
-      : posts.filter((p) => p.type === activeFilter);
+  // ← Petit debounce pour ne pas relancer une requête à chaque frappe
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // ← Nouveau filtre/recherche = on repart de la page 1
+  useEffect(() => {
+    setPage(1);
+    setAllPosts([]);
+    setAllLoaded(false);
+  }, [activeFilter, debouncedSearch]);
+
+  const { data, isLoading, isFetching, refetch } = useListings({
+    type: activeFilter === "all" ? undefined : activeFilter,
+    search: debouncedSearch || undefined,
+    page,
+    per_page: 5,
+  });
+
+  // ← Accumule les pages au lieu de les remplacer (pagination infinie)
+  useEffect(() => {
+    if (!data) return;
+    setAllPosts((prev) => {
+      if (page === 1) return data.data;
+      const existingIds = new Set(prev.map((p) => p.id));
+      return [...prev, ...data.data.filter((p) => !existingIds.has(p.id))];
+    });
+    if (data.current_page >= data.last_page) setAllLoaded(true);
+  }, [data, page]);
 
   const loadMore = useCallback(() => {
-    if (loading || allLoaded) return;
-    setLoading(true);
-    setTimeout(() => {
-      const currentLen = posts.length;
-      const next = MOCK_POSTS.slice(currentLen, currentLen + 2);
-      if (next.length === 0) {
-        setAllLoaded(true);
-      } else {
-        setPosts((prev) => [...prev, ...next]);
-      }
-      setLoading(false);
-    }, 1200);
-  }, [loading, allLoaded, posts.length]);
+    if (isFetching || allLoaded) return;
+    setPage((p) => p + 1);
+  }, [isFetching, allLoaded]);
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
@@ -101,6 +118,13 @@ export function FeedPage({ onBack }: FeedPageProps) {
     if (loadMoreRef.current) observerRef.current.observe(loadMoreRef.current);
     return () => observerRef.current?.disconnect();
   }, [loadMore]);
+
+  const handleRefresh = () => {
+    setPage(1);
+    setAllPosts([]);
+    setAllLoaded(false);
+    refetch();
+  };
 
   const SIDEBAR_ITEMS: {
     key: string;
@@ -120,35 +144,32 @@ export function FeedPage({ onBack }: FeedPageProps) {
       key: "messages",
       icon: MessageCircle,
       label: t("feed.messages"),
-      action: () => setActiveSidebar("messages"),
+      action: () => onNavigate?.("messages"),
     },
     {
       key: "search",
       icon: Search,
       label: t("feed.explore"),
-      action: () => setShowSearch(true),
+      action: () => onNavigate?.("search"),
     },
     {
       key: "notifications",
       icon: Bell,
       label: t("feed.notifications"),
-      badge: notifications,
-      action: () => {
-        setActiveSidebar("notifications");
-        setNotifications(0);
-      },
+      badge: unreadNotifications,
+      action: () => onNavigate?.("profile"),
     },
     {
       key: "saved",
       icon: Bookmark,
       label: t("feed.saved"),
-      action: () => setActiveSidebar("saved"),
+      action: () => onNavigate?.("favorites"),
     },
     {
       key: "profile",
       icon: User,
       label: t("mobileNav.profile"),
-      action: () => setActiveSidebar("profile"),
+      action: () => onNavigate?.("profile"),
     },
   ];
 
@@ -156,7 +177,6 @@ export function FeedPage({ onBack }: FeedPageProps) {
     <div className="min-h-screen bg-[var(--pc-surface-alt)] dark:bg-[#060C12] flex overflow-x-hidden w-full">
       {/* ── Desktop Left Sidebar ── */}
       <aside className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 w-64 xl:w-72 bg-[var(--pc-surface)] dark:bg-[#0D1117] border-r border-[var(--pc-border)] dark:border-[var(--pc-border)] z-40 px-4 py-6">
-        {/* Logo */}
         <motion.div
           whileHover={{ scale: 1.03 }}
           onClick={onBack}
@@ -171,14 +191,13 @@ export function FeedPage({ onBack }: FeedPageProps) {
           </span>
         </motion.div>
 
-        {/* Nav */}
         <nav className="flex-1 space-y-1">
           {SIDEBAR_ITEMS.map(({ key, icon: Icon, label, action, badge }) => (
             <motion.button
               key={key}
               whileHover={{ x: isRtl ? -4 : 4 }}
               whileTap={{ scale: 0.97 }}
-              onClick={action as () => void}
+              onClick={action}
               className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 ${
                 activeSidebar === key && key !== "home"
                   ? "bg-[var(--pc-primary-light)] dark:bg-[var(--pc-primary-light)]/20 text-[var(--pc-primary)]"
@@ -206,10 +225,10 @@ export function FeedPage({ onBack }: FeedPageProps) {
           ))}
         </nav>
 
-        {/* Publish button */}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
+          onClick={() => onNavigate?.("create-listing")}
           className="gradient-btn w-full flex items-center justify-center gap-2 text-white font-bold py-3.5 rounded-xl mt-4 shadow-lg shadow-[var(--pc-primary)]/25"
           style={{ fontSize: "14px" }}
         >
@@ -292,18 +311,18 @@ export function FeedPage({ onBack }: FeedPageProps) {
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[var(--pc-surface-alt)] transition-colors"
-                    onClick={() => setNotifications(0)}
+                    onClick={() => onNavigate?.("profile")}
                   >
                     <Bell
                       size={18}
                       className="text-[var(--pc-text-secondary)]"
                     />
-                    {notifications > 0 && (
+                    {unreadNotifications > 0 && (
                       <span
                         className="absolute top-1 right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full flex items-center justify-center font-bold"
                         style={{ fontSize: "8px" }}
                       >
-                        {notifications}
+                        {unreadNotifications}
                       </span>
                     )}
                   </motion.button>
@@ -339,10 +358,14 @@ export function FeedPage({ onBack }: FeedPageProps) {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={handleRefresh}
                 className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface)] hover:border-[var(--pc-primary)] text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] transition-all"
                 style={{ fontSize: "13px", fontWeight: 600 }}
               >
-                <SlidersHorizontal size={16} />
+                <RefreshCw
+                  size={16}
+                  className={isFetching && page === 1 ? "animate-spin" : ""}
+                />
                 {t("feed.filters")}
               </motion.button>
             </div>
@@ -377,21 +400,25 @@ export function FeedPage({ onBack }: FeedPageProps) {
               ))}
             </div>
 
-            {/* New posts pill */}
-            <div className="flex justify-center mb-4">
+            {/* Refresh pill (mobile) */}
+            <div className="flex justify-center mb-4 lg:hidden">
               <motion.button
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
+                onClick={handleRefresh}
                 className="flex items-center gap-2 bg-[var(--pc-primary)] text-white px-4 py-2 rounded-full shadow-lg shadow-[var(--pc-primary)]/30"
                 style={{ fontSize: "13px", fontWeight: 600 }}
               >
-                <TrendingUp size={14} />
-                {t("feed.newPosts")} ✨
+                <RefreshCw
+                  size={14}
+                  className={isFetching && page === 1 ? "animate-spin" : ""}
+                />
+                Actualiser
               </motion.button>
             </div>
 
             {/* Posts */}
-            {filteredPosts.length === 0 ? (
+            {!isLoading && allPosts.length === 0 ? (
               <div className="text-center py-16 text-[var(--pc-text-secondary)]">
                 <div className="text-5xl mb-4">🐾</div>
                 <p style={{ fontSize: "16px", fontWeight: 600 }}>
@@ -399,13 +426,17 @@ export function FeedPage({ onBack }: FeedPageProps) {
                 </p>
               </div>
             ) : (
-              filteredPosts.map((post) => (
-                <PostCard key={post.id} post={post} />
+              allPosts.map((listing) => (
+                <PostCard
+                  key={listing.id}
+                  listing={listing}
+                  onNavigate={onNavigate}
+                />
               ))
             )}
 
             {/* Skeleton loaders */}
-            {loading && (
+            {(isLoading || (isFetching && page > 1)) && (
               <>
                 <SkeletonPost />
                 <SkeletonPost />
@@ -416,7 +447,7 @@ export function FeedPage({ onBack }: FeedPageProps) {
             <div ref={loadMoreRef} className="h-4" />
 
             {/* All loaded */}
-            {allLoaded && (
+            {allLoaded && allPosts.length > 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -432,99 +463,58 @@ export function FeedPage({ onBack }: FeedPageProps) {
 
           {/* Right panel (desktop only) */}
           <aside className="hidden xl:flex flex-col gap-5 w-72 flex-shrink-0">
-            {/* Suggestions */}
-            <div className="bg-[var(--pc-surface)] dark:bg-[#161B22] rounded-2xl p-4 border border-[var(--pc-border)]">
-              <h3
-                className="font-bold text-[var(--pc-text-primary)] mb-4"
-                style={{ fontSize: "14px" }}
-              >
-                {t("feed.suggestions")}
-              </h3>
-              <div className="space-y-3">
-                {SUGGESTIONS.map((s) => (
-                  <div
-                    key={s.id}
-                    className={`flex items-center justify-between ${isRtl ? "flex-row-reverse" : ""}`}
-                  >
-                    <div
-                      className={`flex items-center gap-3 ${isRtl ? "flex-row-reverse" : ""}`}
+            <FollowSuggestionsCard
+              isRtl={isRtl}
+              t={t}
+              onNavigate={onNavigate}
+            />
+
+            {/* Autres publications récentes */}
+            {allPosts.length > 3 && (
+              <div className="bg-[var(--pc-surface)] dark:bg-[#161B22] rounded-2xl p-4 border border-[var(--pc-border)]">
+                <h3
+                  className="font-bold text-[var(--pc-text-primary)] mb-3"
+                  style={{ fontSize: "14px" }}
+                >
+                  {t("feed.recommended")}
+                </h3>
+                <div className="space-y-2">
+                  {allPosts.slice(3, 6).map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() =>
+                        onNavigate?.("pet-detail", { id: String(p.id) })
+                      }
+                      className={`flex gap-2 items-center w-full text-left ${isRtl ? "flex-row-reverse" : ""}`}
                     >
-                      <div className="relative">
-                        <img
-                          src={s.avatar}
-                          alt={s.name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[var(--pc-primary)] rounded-full flex items-center justify-center">
-                          <BadgeCheck size={9} className="text-white" />
-                        </div>
-                      </div>
-                      <div>
+                      <img
+                        src={
+                          p.photos?.[0] ??
+                          `https://picsum.photos/seed/rec-${p.id}/100/100`
+                        }
+                        alt=""
+                        className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
                         <p
-                          className="font-semibold text-[var(--pc-text-primary)]"
-                          style={{ fontSize: "13px" }}
+                          className="font-semibold text-[var(--pc-text-primary)] truncate"
+                          style={{ fontSize: "12px" }}
                         >
-                          {s.name}
+                          {p.user?.name}
                         </p>
                         <p
-                          className="text-[var(--pc-text-secondary)]"
+                          className="text-[var(--pc-text-secondary)] truncate"
                           style={{ fontSize: "11px" }}
                         >
-                          {s.followers.toLocaleString()} abonnés
+                          {(p.description ?? p.title).slice(0, 50)}...
                         </p>
                       </div>
-                    </div>
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      className="text-[var(--pc-primary)] border border-[var(--pc-primary)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[var(--pc-primary-light)] transition-colors"
-                      style={{ fontSize: "12px" }}
-                    >
-                      {t("feed.follow")}
-                    </motion.button>
-                  </div>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Recommended */}
-            <div className="bg-[var(--pc-surface)] dark:bg-[#161B22] rounded-2xl p-4 border border-[var(--pc-border)]">
-              <h3
-                className="font-bold text-[var(--pc-text-primary)] mb-3"
-                style={{ fontSize: "14px" }}
-              >
-                {t("feed.recommended")}
-              </h3>
-              <div className="space-y-2">
-                {MOCK_POSTS.slice(0, 3).map((p) => (
-                  <div
-                    key={p.id}
-                    className={`flex gap-2 items-center ${isRtl ? "flex-row-reverse" : ""}`}
-                  >
-                    <img
-                      src={p.media[0].url}
-                      alt=""
-                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="font-semibold text-[var(--pc-text-primary)] truncate"
-                        style={{ fontSize: "12px" }}
-                      >
-                        {p.user.name}
-                      </p>
-                      <p
-                        className="text-[var(--pc-text-secondary)] truncate"
-                        style={{ fontSize: "11px" }}
-                      >
-                        {p.caption.slice(0, 50)}...
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer links */}
             <p
               className="text-[var(--pc-text-secondary)] px-1"
               style={{ fontSize: "11px" }}
@@ -553,11 +543,19 @@ export function FeedPage({ onBack }: FeedPageProps) {
             {
               key: "publish",
               icon: PlusCircle,
-              action: () => {},
+              action: () => onNavigate?.("create-listing"),
               isPrimary: true,
             },
-            { key: "messages", icon: MessageCircle, action: () => {} },
-            { key: "profile", icon: User, action: () => {} },
+            {
+              key: "messages",
+              icon: MessageCircle,
+              action: () => onNavigate?.("messages"),
+            },
+            {
+              key: "profile",
+              icon: User,
+              action: () => onNavigate?.("profile"),
+            },
           ].map(({ key, icon: Icon, action, isPrimary }) => {
             const isActive = key === "feed";
             if (isPrimary) {
@@ -588,6 +586,99 @@ export function FeedPage({ onBack }: FeedPageProps) {
         </div>
       </nav>
       <div className="lg:hidden h-24" />
+    </div>
+  );
+}
+
+// ── Suggestions d'abonnement (encart séparé pour rester lisible) ──────────────
+function FollowSuggestionsCard({
+  isRtl,
+  t,
+  onNavigate,
+}: {
+  isRtl: boolean;
+  t: (key: string) => string;
+  onNavigate?: (page: string, params?: Record<string, string>) => void;
+}) {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const { data: suggestions } = useFollowSuggestions();
+  const toggleFollow = useToggleFollow();
+  const [followedIds, setFollowedIds] = useState<Set<number>>(new Set());
+
+  if (!isLoggedIn || !suggestions || suggestions.length === 0) return null;
+
+  const handleFollow = (userId: number) => {
+    setFollowedIds((prev) => new Set(prev).add(userId));
+    toggleFollow.mutate(userId, {
+      onError: () => {
+        setFollowedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      },
+    });
+  };
+
+  const visible = suggestions.filter((s) => !followedIds.has(s.id));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="bg-[var(--pc-surface)] dark:bg-[#161B22] rounded-2xl p-4 border border-[var(--pc-border)]">
+      <h3
+        className="font-bold text-[var(--pc-text-primary)] mb-4"
+        style={{ fontSize: "14px" }}
+      >
+        {t("feed.suggestions")}
+      </h3>
+      <div className="space-y-3">
+        {visible.map((s) => (
+          <div
+            key={s.id}
+            className={`flex items-center justify-between ${isRtl ? "flex-row-reverse" : ""}`}
+          >
+            <button
+              onClick={() => onNavigate?.("profile", { userId: String(s.id) })}
+              className={`flex items-center gap-3 text-left ${isRtl ? "flex-row-reverse" : ""}`}
+            >
+              <div className="relative">
+                <img
+                  src={
+                    s.avatar ?? `https://picsum.photos/seed/sugg-${s.id}/80/80`
+                  }
+                  alt={s.name}
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[var(--pc-primary)] rounded-full flex items-center justify-center">
+                  <BadgeCheck size={9} className="text-white" />
+                </div>
+              </div>
+              <div>
+                <p
+                  className="font-semibold text-[var(--pc-text-primary)]"
+                  style={{ fontSize: "13px" }}
+                >
+                  {s.name}
+                </p>
+                <p
+                  className="text-[var(--pc-text-secondary)]"
+                  style={{ fontSize: "11px" }}
+                >
+                  {s.followers_count.toLocaleString()} abonnés
+                </p>
+              </div>
+            </button>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleFollow(s.id)}
+              className="text-[var(--pc-primary)] border border-[var(--pc-primary)] px-3 py-1.5 rounded-lg font-semibold hover:bg-[var(--pc-primary-light)] transition-colors"
+              style={{ fontSize: "12px" }}
+            >
+              {t("feed.follow")}
+            </motion.button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -178,7 +178,10 @@ export default function App() {
             <HowItWorks onNavigate={handleNavigate} />
             <VetDirectory onNavigate={handleNavigate} />
             <BoutiqueShowcase onNavigate={handleNavigate} />
-            <CommunityFeed onOpenFeed={() => navigate("/feed")} />
+            <CommunityFeed
+              onOpenFeed={() => navigate("/feed")}
+              onNavigate={handleNavigate}
+            />
             <PremiumSection />
             <TrustSafety />
             <AppDownload />

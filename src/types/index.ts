@@ -45,6 +45,13 @@ export interface Listing {
   is_premium: boolean;
   is_active: boolean;
   views_count: number;
+  // ← Feed communauté : compteurs dénormalisés + état pour l'utilisateur
+  // connecté (calculés côté serveur, jamais côté client).
+  likes_count?: number;
+  comments_count?: number;
+  shares_count?: number;
+  is_liked_by_me?: boolean;
+  is_saved_by_me?: boolean;
   expires_at?: string | null;
   created_at: string;
   user?: User;
@@ -267,4 +274,31 @@ export interface CartItem {
   photo?: string | null;
   quantity: number;
   stockQuantity: number;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FEED COMMUNAUTÉ (commentaires + réponses + abonnements)
+// ─────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: number;
+  listing_id: number;
+  user_id: number;
+  parent_id?: number | null;
+  body: string;
+  likes_count: number;
+  is_liked_by_me?: boolean;
+  created_at: string;
+  user?: Pick<User, "id" | "name" | "avatar" | "role">;
+  replies?: Comment[];
+}
+
+export interface FollowSuggestion {
+  id: number;
+  name: string;
+  avatar?: string | null;
+  role: string;
+  city?: string | null;
+  followers_count: number;
+  listings_count: number;
 }
