@@ -29,6 +29,7 @@ import {
   Edit3,
   ShoppingBag,
   Package,
+  Flag,
 } from "lucide-react";
 import {
   BarChart,
@@ -60,14 +61,22 @@ import {
   useAdminDeleteProduct,
   useAdminOrders,
   useAdminUpdateOrderStatus,
+  useAdminReports,
+  useAdminUpdateReportStatus,
 } from "../../hooks/useAdmin";
-import type { User, Listing, Product, Order } from "../../types";
+import type { User, Listing, Product, Order, ReportStatus } from "../../types";
 import type { CreateUserPayload, UpdateUserPayload } from "../../api/admin";
 import { uploadApi } from "../../api/upload";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type AdminTab = "overview" | "users" | "listings" | "products" | "orders";
+type AdminTab =
+  | "overview"
+  | "users"
+  | "listings"
+  | "products"
+  | "orders"
+  | "reports";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -2240,6 +2249,277 @@ function OrdersTab({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+const REPORT_STATUSES = [
+  "pending",
+  "reviewed",
+  "dismissed",
+  "actioned",
+] as const;
+
+const REPORT_STATUS_LABELS: Record<string, string> = {
+  pending: "En attente",
+  reviewed: "Examiné",
+  dismissed: "Rejeté",
+  actioned: "Action prise",
+};
+
+const REPORT_STATUS_COLORS: Record<string, string> = {
+  pending:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  reviewed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  dismissed: "bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300",
+  actioned: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+};
+
+// ← reportable_type est la classe PHP brute renvoyée par le backend
+// (ex: "App\\Models\\Listing") : on ne matche que la fin du nom de classe.
+function reportableTypeLabel(type: string): string {
+  if (type.endsWith("Listing")) return "Annonce";
+  if (type.endsWith("User")) return "Profil";
+  if (type.endsWith("Comment")) return "Commentaire";
+  return "Contenu";
+}
+
+function reportableLink(type: string, id: number): string | null {
+  if (type.endsWith("Listing")) return `/listings/${id}`;
+  if (type.endsWith("User")) return `/profile/${id}`;
+  return null;
+}
+
+function ReportsTab({
+  onToast,
+}: {
+  onToast: (msg: string, err?: boolean) => void;
+}) {
+  const [status, setStatus] = useState("");
+  const [type, setType] = useState("");
+  const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [notesDraft, setNotesDraft] = useState<Record<number, string>>({});
+
+  const { data, isLoading, refetch } = useAdminReports({
+    status: (status || undefined) as ReportStatus | undefined,
+    type: (type || undefined) as "listing" | "profile" | "comment" | undefined,
+    page,
+    per_page: 15,
+  });
+  const updateStatus = useAdminUpdateReportStatus();
+
+  const reports = data?.data ?? [];
+  const totalPages = data?.last_page ?? 1;
+
+  async function handleStatusChange(id: number, newStatus: string) {
+    try {
+      await updateStatus.mutateAsync({
+        id,
+        status: newStatus as ReportStatus,
+        admin_notes: notesDraft[id],
+      });
+      onToast("Signalement mis à jour ✅");
+    } catch {
+      onToast("Action impossible", true);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="font-bold text-[var(--pc-text-primary)]">
+          Signalements{" "}
+          <span className="text-[var(--pc-text-secondary)] font-normal text-sm">
+            ({data?.total ?? 0})
+          </span>
+        </h2>
+        <button
+          onClick={() => refetch()}
+          className="p-2 rounded-xl border border-[var(--pc-border)] hover:bg-[var(--pc-surface-alt)] transition-colors"
+        >
+          <RefreshCw size={15} className="text-[var(--pc-text-secondary)]" />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-sm text-[var(--pc-text-primary)] focus:outline-none"
+        >
+          <option value="">Tous les statuts</option>
+          {REPORT_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {REPORT_STATUS_LABELS[s]}
+            </option>
+          ))}
+        </select>
+        <select
+          value={type}
+          onChange={(e) => {
+            setType(e.target.value);
+            setPage(1);
+          }}
+          className="px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-sm text-[var(--pc-text-primary)] focus:outline-none"
+        >
+          <option value="">Tous les types</option>
+          <option value="listing">Annonces</option>
+          <option value="profile">Profils</option>
+          <option value="comment">Commentaires</option>
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="glass-card rounded-xl h-14 animate-pulse" />
+          ))}
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="glass-card rounded-2xl p-12 text-center">
+          <p className="text-4xl mb-3">🚩</p>
+          <p className="text-[var(--pc-text-secondary)] text-sm">
+            Aucun signalement pour l'instant
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {reports.map((r, i) => {
+            const link = reportableLink(r.reportable_type, r.reportable_id);
+            return (
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.03 }}
+                className="glass-card rounded-2xl overflow-hidden"
+              >
+                <button
+                  onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-[var(--pc-text-primary)] text-sm">
+                      {reportableTypeLabel(r.reportable_type)} #
+                      {r.reportable_id} — {r.reason}
+                    </p>
+                    <p className="text-xs text-[var(--pc-text-secondary)]">
+                      Par {r.user?.name ?? "Utilisateur"} ·{" "}
+                      {new Date(r.created_at).toLocaleDateString("fr-TN")}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${REPORT_STATUS_COLORS[r.status]}`}
+                  >
+                    {REPORT_STATUS_LABELS[r.status]}
+                  </span>
+                </button>
+
+                {expanded === r.id && (
+                  <div className="px-4 pb-4 border-t border-[var(--pc-border)] pt-3 space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                        Contenu signalé
+                      </p>
+                      <p className="text-xs text-[var(--pc-text-primary)]">
+                        {r.reportable?.title ??
+                          r.reportable?.name ??
+                          r.reportable?.body ??
+                          "Contenu introuvable (peut-être supprimé)"}
+                      </p>
+                      {link && (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-[var(--pc-primary)] underline"
+                        >
+                          Voir la fiche
+                        </a>
+                      )}
+                    </div>
+                    {r.details && (
+                      <div>
+                        <p className="text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                          Détails fournis par l'utilisateur
+                        </p>
+                        <p className="text-xs text-[var(--pc-text-primary)]">
+                          {r.details}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                        Note interne (optionnelle)
+                      </label>
+                      <textarea
+                        value={notesDraft[r.id] ?? r.admin_notes ?? ""}
+                        onChange={(e) =>
+                          setNotesDraft((d) => ({
+                            ...d,
+                            [r.id]: e.target.value,
+                          }))
+                        }
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-xs text-[var(--pc-text-primary)] focus:outline-none focus:border-[var(--pc-primary)] transition-colors resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[var(--pc-text-secondary)] mb-1">
+                        Changer le statut
+                      </label>
+                      <select
+                        value={r.status}
+                        onChange={(e) =>
+                          handleStatusChange(r.id, e.target.value)
+                        }
+                        disabled={updateStatus.isPending}
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-[var(--pc-text-primary)] text-sm focus:outline-none focus:border-[var(--pc-primary)] transition-colors"
+                      >
+                        {REPORT_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {REPORT_STATUS_LABELS[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-2 py-3">
+              <span className="text-xs text-[var(--pc-text-secondary)]">
+                Page {page} / {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="p-1.5 rounded-lg border border-[var(--pc-border)] disabled:opacity-40 hover:bg-[var(--pc-surface-alt)] transition-colors"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <button
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="p-1.5 rounded-lg border border-[var(--pc-border)] disabled:opacity-40 hover:bg-[var(--pc-surface-alt)] transition-colors"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export function AdminPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
@@ -2279,6 +2559,11 @@ export function AdminPage() {
       key: "orders" as AdminTab,
       icon: <Package size={16} />,
       label: "Commandes",
+    },
+    {
+      key: "reports" as AdminTab,
+      icon: <Flag size={16} />,
+      label: "Signalements",
     },
   ];
 
@@ -2360,6 +2645,7 @@ export function AdminPage() {
             {activeTab === "listings" && <ListingsTab onToast={showToast} />}
             {activeTab === "products" && <ProductsTab onToast={showToast} />}
             {activeTab === "orders" && <OrdersTab onToast={showToast} />}
+            {activeTab === "reports" && <ReportsTab onToast={showToast} />}
           </motion.div>
         </AnimatePresence>
       </main>

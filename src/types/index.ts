@@ -1,3 +1,58 @@
+export interface Review {
+  id: number;
+  user_id: number;
+  reviewable_type: string;
+  reviewable_id: number;
+  rating: number;
+  comment?: string | null;
+  created_at: string;
+  user?: Pick<User, "id" | "name" | "avatar">;
+}
+
+export interface Vet {
+  id: number;
+  clinic_name: string;
+  doctor_name: string;
+  speciality?: string | null;
+  phone: string;
+  email?: string | null;
+  address: string;
+  city: string;
+  region?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  opening_hours?: Record<string, string> | null;
+  services?: string[] | null;
+  photo?: string | null;
+  is_verified: boolean;
+  is_active?: boolean;
+  rating: number | string;
+  reviews_count: number;
+  reviews?: Review[];
+}
+
+export interface PetStore {
+  id: number;
+  store_name: string;
+  description?: string | null;
+  phone: string;
+  email?: string | null;
+  address: string;
+  city: string;
+  region?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  opening_hours?: Record<string, string> | null;
+  services?: string[] | null;
+  logo?: string | null;
+  photos?: string[] | null;
+  is_verified: boolean;
+  is_active?: boolean;
+  rating: number | string;
+  reviews_count: number;
+  reviews?: Review[];
+}
+
 export interface User {
   id: number;
   name: string;
@@ -157,15 +212,6 @@ export interface AppNotification {
   created_at: string;
 }
 
-export interface Review {
-  id: number;
-  user_id: number;
-  rating: number;
-  comment?: string;
-  created_at: string;
-  user?: User;
-}
-
 export interface Favorite {
   id: number;
   user_id: number;
@@ -301,4 +347,30 @@ export interface FollowSuggestion {
   city?: string | null;
   followers_count: number;
   listings_count: number;
+}
+
+export type ReportStatus = "pending" | "reviewed" | "dismissed" | "actioned";
+
+// ← `reportable_type` reste la classe PHP brute (ex: "App\\Models\\Listing")
+// telle que renvoyée par le backend ; `reportable` est un résumé minimal du
+// contenu ciblé (annonce, profil ou commentaire) pour l'affichage admin,
+// chargé via loadMorph côté backend.
+export interface Report {
+  id: number;
+  user_id: number;
+  reportable_type: string;
+  reportable_id: number;
+  reason: string;
+  details?: string | null;
+  status: ReportStatus;
+  admin_notes?: string | null;
+  created_at: string;
+  user?: Pick<User, "id" | "name" | "email" | "avatar">;
+  reportable?: {
+    id: number;
+    title?: string;
+    name?: string;
+    body?: string;
+    user?: Pick<User, "id" | "name">;
+  } | null;
 }

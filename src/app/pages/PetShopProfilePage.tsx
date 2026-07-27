@@ -20,6 +20,7 @@ import {
 import { usePetStore } from "../../hooks/usePetStores";
 import { useToggleFavorite } from "../../hooks/useFavorites";
 import { useAuth } from "../../hooks/useAuth";
+import ReviewsSection from "../components/reviews/ReviewsSection";
 import type { PetStore } from "../../types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -58,24 +59,6 @@ function buildHoursRows(
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StarRow({ rating }: { rating: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((s) => (
-        <Star
-          key={s}
-          size={14}
-          className={
-            s <= Math.round(rating)
-              ? "fill-amber-400 text-amber-400"
-              : "text-gray-300"
-          }
-        />
-      ))}
-    </div>
-  );
-}
 
 function LoadingState() {
   return (
@@ -426,44 +409,14 @@ export function PetShopProfilePage({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
             >
-              <div className="glass-card p-4 rounded-2xl flex items-center gap-4">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-[var(--pc-text-primary)]">
-                    {rating.toFixed(1)}
-                  </div>
-                  <StarRow rating={rating} />
-                  <div className="text-xs text-[var(--pc-text-secondary)] mt-1">
-                    {reviewsCount} avis
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1.5">
-                  {[5, 4, 3, 2, 1].map((star) => {
-                    const pct =
-                      star === 5 ? 70 : star === 4 ? 20 : star === 3 ? 7 : 3;
-                    return (
-                      <div key={star} className="flex items-center gap-2">
-                        <span className="text-xs w-3">{star}</span>
-                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${pct}%`,
-                              background: "var(--pc-accent)",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              {reviewsCount === 0 && (
-                <div className="text-center py-8 text-[var(--pc-text-secondary)] text-sm">
-                  Aucun avis pour le moment
-                </div>
-              )}
+              <ReviewsSection
+                type="pet_store"
+                targetId={store.id}
+                rating={rating}
+                reviewsCount={reviewsCount}
+                reviews={store.reviews ?? []}
+              />
             </motion.div>
           )}
 

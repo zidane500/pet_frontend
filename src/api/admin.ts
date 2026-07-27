@@ -6,6 +6,8 @@ import type {
   ProductCategory,
   Order,
   OrderStatus,
+  Report,
+  ReportStatus,
   PaginatedResponse,
 } from "../types";
 
@@ -58,6 +60,13 @@ export interface AdminProductFilters {
 export interface AdminOrderFilters {
   search?: string;
   status?: OrderStatus;
+  page?: number;
+  per_page?: number;
+}
+
+export interface AdminReportFilters {
+  status?: ReportStatus;
+  type?: "listing" | "profile" | "comment";
   page?: number;
   per_page?: number;
 }
@@ -221,6 +230,22 @@ export const adminApi = {
     payload: { status: OrderStatus; admin_notes?: string },
   ): Promise<{ message: string; order: Order }> => {
     const res = await client.patch(`/admin/orders/${id}/status`, payload);
+    return res.data;
+  },
+
+  // Signalements
+  getReports: async (
+    filters?: AdminReportFilters,
+  ): Promise<PaginatedResponse<Report>> => {
+    const res = await client.get("/admin/reports", { params: filters });
+    return res.data;
+  },
+
+  updateReportStatus: async (
+    id: number,
+    payload: { status: ReportStatus; admin_notes?: string },
+  ): Promise<{ message: string; report: Report }> => {
+    const res = await client.patch(`/admin/reports/${id}/status`, payload);
     return res.data;
   },
 };

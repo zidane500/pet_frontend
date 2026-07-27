@@ -5,11 +5,12 @@ import {
   type AdminListingFilters,
   type AdminProductFilters,
   type AdminOrderFilters,
+  type AdminReportFilters,
   type CreateUserPayload,
   type UpdateUserPayload,
   type ProductPayload,
 } from "../api/admin";
-import type { OrderStatus } from "../types";
+import type { OrderStatus, ReportStatus } from "../types";
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
 
@@ -222,6 +223,34 @@ export function useAdminUpdateOrderStatus() {
     }) => adminApi.updateOrderStatus(id, { status, admin_notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
+// ─── Signalements ────────────────────────────────────────────────────────────
+
+export function useAdminReports(filters?: AdminReportFilters) {
+  return useQuery({
+    queryKey: ["admin", "reports", filters],
+    queryFn: () => adminApi.getReports(filters),
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useAdminUpdateReportStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      admin_notes,
+    }: {
+      id: number;
+      status: ReportStatus;
+      admin_notes?: string;
+    }) => adminApi.updateReportStatus(id, { status, admin_notes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "reports"] });
     },
   });
 }

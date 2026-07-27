@@ -21,6 +21,7 @@ import {
   Link,
   Check,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Listing, Comment as CommentType } from "../../../types";
@@ -28,6 +29,7 @@ import { useAuthStore } from "../../../store/authStore";
 import { useToggleLike } from "../../../hooks/useLikes";
 import { useToggleFavorite } from "../../../hooks/useFavorites";
 import { useComments, useCreateComment } from "../../../hooks/useComments";
+import { useCreateReport } from "../../../hooks/useReports";
 import { listingsApi } from "../../../api/listings";
 
 const REPORT_REASONS = [
@@ -166,17 +168,34 @@ function ShareModal({
   );
 }
 
-// ── Report Modal (UI uniquement pour l'instant, pas encore reliée à un
-// vrai système de modération côté serveur — hors périmètre de cette
-// réécriture, gardée telle quelle pour ne rien casser visuellement) ──
-function ReportModal({ onClose }: { onClose: () => void }) {
+// ── Report Modal — signale la publication via POST /reports ──
+function ReportModal({
+  listingId,
+  onClose,
+}: {
+  listingId: number;
+  onClose: () => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [details, setDetails] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const handleSubmit = () => {
+  const createReport = useCreateReport();
+
+  const handleSubmit = async () => {
     if (!selected) return;
-    setSubmitted(true);
-    setTimeout(onClose, 1500);
+    try {
+      await createReport.mutateAsync({
+        type: "post",
+        id: listingId,
+        reason: selected,
+        details: details.trim() || undefined,
+      });
+      setSubmitted(true);
+      setTimeout(onClose, 1500);
+    } catch {
+      // ← L'erreur reste affichée sous le bouton (voir plus bas), la modale
+      // ne se ferme pas pour laisser l'utilisateur réessayer.
+    }
   };
   return (
     <motion.div
@@ -261,18 +280,27 @@ function ReportModal({ onClose }: { onClose: () => void }) {
               rows={2}
               className="w-full bg-[var(--pc-surface-alt)] border border-[var(--pc-border)] rounded-xl px-3 py-2 text-sm text-[var(--pc-text-primary)] placeholder-[var(--pc-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--pc-primary)]/40 resize-none mb-4"
             />
+            {createReport.isError && (
+              <div className="flex items-center gap-2 text-red-400 text-sm mb-4 bg-red-500/10 rounded-xl px-3 py-2">
+                <AlertCircle size={14} /> Échec de l'envoi. Réessayez.
+              </div>
+            )}
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSubmit}
-              disabled={!selected}
-              className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-40 transition-opacity"
+              disabled={!selected || createReport.isPending}
+              className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-40 transition-opacity flex items-center justify-center gap-2"
               style={{
                 background:
                   "linear-gradient(135deg, var(--pc-primary), #2aad85)",
                 fontSize: "14px",
               }}
             >
-              Envoyer le signalement
+              {createReport.isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                "Envoyer le signalement"
+              )}
             </motion.button>
           </>
         )}
@@ -540,6 +568,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
         )}
         {showReportModal && (
           <ReportModal
+            listingId={listing.id}
             onClose={() => {
               setShowReportModal(false);
               setShowMoreMenu(false);

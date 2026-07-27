@@ -149,7 +149,7 @@ export function Navbar({
                   className="font-black bg-gradient-to-r from-[var(--pc-primary)] to-emerald-500 bg-clip-text text-transparent"
                   style={{ fontFamily: "Sora, sans-serif", fontSize: "19px" }}
                 >
-                  Animali
+                  Peto
                 </span>
                 <span
                   className="font-black text-[var(--pc-accent)] mb-px"

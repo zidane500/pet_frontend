@@ -24,6 +24,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useProfile } from "../../hooks/useProfile";
 import { useListings } from "../../hooks/useListings";
+import { useCreateReport } from "../../hooks/useReports";
 import { useAuthStore } from "../../store/authStore";
 import type { Listing } from "../../types";
 
@@ -213,13 +214,31 @@ function ListingMiniCard({
   );
 }
 
-function ReportModal({ onClose }: { onClose: () => void }) {
+function ReportModal({
+  profileId,
+  onClose,
+}: {
+  profileId: number;
+  onClose: () => void;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const handleSubmit = () => {
+  const createReport = useCreateReport();
+
+  const handleSubmit = async () => {
     if (!selected) return;
-    setSubmitted(true);
-    setTimeout(onClose, 1500);
+    try {
+      await createReport.mutateAsync({
+        type: "profile",
+        id: profileId,
+        reason: selected,
+      });
+      setSubmitted(true);
+      setTimeout(onClose, 1500);
+    } catch {
+      // ← L'erreur reste affichée sous les motifs (voir plus bas), la
+      // modale ne se ferme pas pour laisser l'utilisateur réessayer.
+    }
   };
   return (
     <motion.div
@@ -294,18 +313,27 @@ function ReportModal({ onClose }: { onClose: () => void }) {
                 </label>
               ))}
             </div>
+            {createReport.isError && (
+              <div className="flex items-center gap-2 text-red-400 text-sm mb-4 bg-red-500/10 rounded-xl px-3 py-2">
+                <AlertCircle size={14} /> Échec de l'envoi. Réessayez.
+              </div>
+            )}
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSubmit}
-              disabled={!selected}
-              className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-40"
+              disabled={!selected || createReport.isPending}
+              className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2"
               style={{
                 background:
                   "linear-gradient(135deg, var(--pc-primary), #2aad85)",
                 fontSize: "14px",
               }}
             >
-              Envoyer le signalement
+              {createReport.isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                "Envoyer le signalement"
+              )}
             </motion.button>
           </>
         )}
@@ -427,6 +455,7 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
       <AnimatePresence>
         {showReportModal && (
           <ReportModal
+            profileId={profileId}
             onClose={() => {
               setShowReportModal(false);
               setShowMoreMenu(false);
