@@ -20,7 +20,7 @@ import { PostCard } from "../components/feed/PostCard";
 import { SkeletonPost } from "../components/feed/SkeletonPost";
 import { LangSelector } from "../components/LangSelector";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { useListings } from "../../hooks/useListings";
+import { useListings, useListing } from "../../hooks/useListings";
 import { useFollowSuggestions, useToggleFollow } from "../../hooks/useFollows";
 import { useUnreadCount } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../store/authStore";
@@ -51,9 +51,12 @@ const FILTER_DOTS: Record<string, string> = {
 interface FeedPageProps {
   onBack: () => void;
   onNavigate?: (page: string, params?: Record<string, string>) => void;
+  // ← Permet d'ouvrir le feed directement sur un post précis (ex: lien
+  // "Voir la fiche" depuis la file de signalements admin).
+  highlightId?: number;
 }
 
-export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
+export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
@@ -71,6 +74,11 @@ export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
   const [activeSidebar, setActiveSidebar] = useState("feed");
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToHighlight = useRef(false);
+
+  // ← Charge le post ciblé séparément de la pagination normale (il peut
+  // être en page 3, 4... peu importe, on veut le voir tout de suite).
+  const { data: highlightedListing } = useListing(highlightId ?? 0);
 
   // ← Petit debounce pour ne pas relancer une requête à chaque frappe
   useEffect(() => {
@@ -107,6 +115,27 @@ export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
     if (isFetching || allLoaded) return;
     setPage((p) => p + 1);
   }, [isFetching, allLoaded]);
+
+  // ← Insère le post ciblé en tête de liste s'il n'y est pas déjà (il peut
+  // très bien être hors de la première page de pagination).
+  useEffect(() => {
+    if (!highlightedListing) return;
+    setAllPosts((prev) => {
+      if (prev.some((p) => p.id === highlightedListing.id)) return prev;
+      return [highlightedListing, ...prev];
+    });
+  }, [highlightedListing]);
+
+  // ← Une fois le post rendu dans le DOM, on scroll jusqu'à lui (une seule
+  // fois, pour ne pas re-scroller à chaque re-render de la liste).
+  useEffect(() => {
+    if (!highlightId || hasScrolledToHighlight.current) return;
+    const el = document.getElementById(`post-${highlightId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      hasScrolledToHighlight.current = true;
+    }
+  }, [allPosts, highlightId]);
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
@@ -157,7 +186,7 @@ export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
       icon: Bell,
       label: t("feed.notifications"),
       badge: unreadNotifications,
-      action: () => onNavigate?.("profile"),
+      action: () => onNavigate?.("notifications"),
     },
     {
       key: "saved",
@@ -427,11 +456,9 @@ export function FeedPage({ onBack, onNavigate }: FeedPageProps) {
               </div>
             ) : (
               allPosts.map((listing) => (
-                <PostCard
-                  key={listing.id}
-                  listing={listing}
-                  onNavigate={onNavigate}
-                />
+                <div key={listing.id} id={`post-${listing.id}`}>
+                  <PostCard listing={listing} onNavigate={onNavigate} />
+                </div>
               ))
             )}
 

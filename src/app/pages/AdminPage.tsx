@@ -2281,7 +2281,9 @@ function reportableTypeLabel(type: string): string {
 }
 
 function reportableLink(type: string, id: number): string | null {
-  if (type.endsWith("Listing")) return `/listings/${id}`;
+  // ← Une annonce signalée depuis le feed communautaire doit ramener
+  // l'admin dans le feed (contexte du post), pas sur la page marketplace.
+  if (type.endsWith("Listing")) return `/feed/${id}`;
   if (type.endsWith("User")) return `/profile/${id}`;
   return null;
 }

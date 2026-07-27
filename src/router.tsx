@@ -173,8 +173,15 @@ function ProfilePageWrapper() {
 }
 
 function FeedPageWrapper() {
-  const { goBack } = usePageNav();
-  return <FeedPage onBack={goBack} />;
+  const { goBack, onNavigate } = usePageNav();
+  const { postId } = useParams<{ postId: string }>();
+  return (
+    <FeedPage
+      onBack={goBack}
+      onNavigate={onNavigate}
+      highlightId={postId ? Number(postId) : undefined}
+    />
+  );
 }
 
 function BoutiquePageWrapper() {
@@ -333,6 +340,7 @@ export const router = createBrowserRouter([
       // ── Routes publiques ────────────────────────────────────
       { path: "search", element: <SearchPageWrapper /> },
       { path: "feed", element: <FeedPageWrapper /> },
+      { path: "feed/:postId", element: <FeedPageWrapper /> },
       { path: "premium", element: <PremiumPageWrapper /> },
       { path: "faq", element: <FAQPageWrapper /> },
       { path: "contact", element: <ContactPageWrapper /> },
