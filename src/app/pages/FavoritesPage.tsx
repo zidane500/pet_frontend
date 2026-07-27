@@ -339,7 +339,7 @@ export function FavoritesPage({ onBack, onNavigate }: FavoritesPageProps) {
                   icon="🩺"
                   title="Aucun vétérinaire sauvegardé"
                   cta="Voir les vétérinaires"
-                  onClick={() => onNavigate("search", { type: "vet" })}
+                  onClick={() => onNavigate("vets")}
                 />
               ) : (
                 <div className="space-y-3">

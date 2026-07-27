@@ -24,6 +24,7 @@ import { ProfileSetupPage } from "./app/pages/ProfileSetupPage";
 import { SearchPage } from "./app/pages/SearchPage";
 import { PetDetailPage } from "./app/pages/PetDetailPage";
 import { VetProfilePage } from "./app/pages/VetProfilePage";
+import { VetsDirectoryPage } from "./app/pages/VetsDirectoryPage";
 import { PetShopProfilePage } from "./app/pages/PetShopProfilePage";
 import { ShelterProfilePage } from "./app/pages/ShelterProfilePage";
 import { ProfilePage } from "./app/pages/ProfilePage";
@@ -70,6 +71,8 @@ function pageToPath(page: string, params?: Record<string, string>): string {
       return "/settings";
     case "vet-profile":
       return `/vets/${params?.id ?? ""}`;
+    case "vets":
+      return "/vets";
     case "shop-profile":
       return `/stores/${params?.id ?? ""}`;
     case "shelter-profile":
@@ -138,6 +141,11 @@ function PetDetailPageWrapper() {
   return (
     <PetDetailPage onBack={goBack} onNavigate={onNavigate} listingId={id} />
   );
+}
+
+function VetsDirectoryPageWrapper() {
+  const { goBack, onNavigate } = usePageNav();
+  return <VetsDirectoryPage onBack={goBack} onNavigate={onNavigate} />;
 }
 
 function VetProfilePageWrapper() {
@@ -345,6 +353,7 @@ export const router = createBrowserRouter([
       { path: "faq", element: <FAQPageWrapper /> },
       { path: "contact", element: <ContactPageWrapper /> },
       { path: "listings/:id", element: <PetDetailPageWrapper /> },
+      { path: "vets", element: <VetsDirectoryPageWrapper /> },
       { path: "vets/:id", element: <VetProfilePageWrapper /> },
       { path: "stores/:id", element: <PetShopProfilePageWrapper /> },
       { path: "shelters/:id", element: <ShelterProfilePageWrapper /> },

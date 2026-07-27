@@ -83,7 +83,7 @@ export function VetDirectory({
             </p>
           </div>
           <button
-            onClick={() => setActiveGov("Tous")}
+            onClick={() => onNavigate?.("vets")}
             className="flex items-center gap-1.5 text-[var(--pc-primary)] font-semibold flex-shrink-0"
             style={{ fontSize: "14px" }}
           >
