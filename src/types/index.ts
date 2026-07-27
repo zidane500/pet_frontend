@@ -374,3 +374,32 @@ export interface Report {
     user?: Pick<User, "id" | "name">;
   } | null;
 }
+
+export type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "declined"
+  | "cancelled"
+  | "completed";
+
+export interface Appointment {
+  id: number;
+  user_id: number;
+  vet_id: number;
+  animal_id?: number | null;
+  service?: string | null;
+  appointment_date: string;
+  appointment_time: string;
+  status: AppointmentStatus;
+  notes?: string | null;
+  vet_notes?: string | null;
+  created_at: string;
+  // ← Présent quand on consulte "mes RDV" (résumé du cabinet)
+  vet?: Pick<
+    Vet,
+    "id" | "clinic_name" | "doctor_name" | "photo" | "address" | "city"
+  >;
+  // ← Présent quand on consulte "les RDV de mon cabinet" (résumé du patient)
+  user?: Pick<User, "id" | "name" | "phone" | "avatar">;
+  animal?: { id: number; name: string } | null;
+}

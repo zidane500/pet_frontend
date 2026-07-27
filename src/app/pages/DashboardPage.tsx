@@ -57,16 +57,25 @@ import {
   Clock,
   Loader2,
   ExternalLink,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 import { ConfirmModal } from "../components/ui/GlobalModals";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { LangSelector } from "../components/LangSelector";
+import {
+  useMyAppointments,
+  useCancelAppointment,
+  useVetAppointments,
+  useUpdateAppointmentStatus,
+} from "../../hooks/useAppointments";
 import type {
   DashboardData,
   Listing,
   Favorite,
   ConversationSummary,
   AppNotification,
+  AppointmentStatus,
 } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,6 +90,7 @@ type MainTab =
   | "myListings"
   | "myFavorites"
   | "messages"
+  | "appointments"
   | "notifications"
   | "settings";
 type SettingsSubTab = "profile" | "security" | "appearance" | "language";
@@ -1380,6 +1390,229 @@ function MessagesTab({
 
 // ─── Notifications Tab — ✅ API réelle ────────────────────────────────────────
 
+// ─── Appointments Tab ──────────────────────────────────────────────────────────
+
+const APPT_STATUS_LABELS: Record<AppointmentStatus, string> = {
+  pending: "En attente",
+  confirmed: "Confirmé",
+  declined: "Refusé",
+  cancelled: "Annulé",
+  completed: "Terminé",
+};
+
+const APPT_STATUS_COLORS: Record<AppointmentStatus, string> = {
+  pending:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  confirmed:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  declined: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-300",
+  completed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+};
+
+function formatApptDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("fr-TN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// ← Mes rendez-vous en tant que propriétaire (patient)
+function MyAppointmentsSection() {
+  const { data, isLoading } = useMyAppointments();
+  const cancelAppointment = useCancelAppointment();
+
+  const appointments = data?.data ?? [];
+
+  return (
+    <div>
+      <h2 className="font-semibold text-[var(--pc-text-primary)] mb-4">
+        Mes rendez-vous
+      </h2>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="glass-card rounded-2xl h-20 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : appointments.length === 0 ? (
+        <div className="glass-card rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
+          <span className="text-4xl">📅</span>
+          <p className="text-[var(--pc-text-secondary)] text-sm">
+            Aucun rendez-vous pour le moment
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {appointments.map((appt) => (
+            <div key={appt.id} className="glass-card rounded-2xl p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-[var(--pc-text-primary)] text-sm">
+                    {appt.vet?.clinic_name ?? "Cabinet vétérinaire"}
+                  </p>
+                  <p className="text-xs text-[var(--pc-text-secondary)] mt-0.5">
+                    {formatApptDate(appt.appointment_date)} à{" "}
+                    {appt.appointment_time}
+                    {appt.service ? ` · ${appt.service}` : ""}
+                  </p>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${APPT_STATUS_COLORS[appt.status]}`}
+                >
+                  {APPT_STATUS_LABELS[appt.status]}
+                </span>
+              </div>
+              {(appt.status === "pending" || appt.status === "confirmed") && (
+                <button
+                  onClick={() => cancelAppointment.mutate(appt.id)}
+                  disabled={cancelAppointment.isPending}
+                  className="mt-3 text-xs font-semibold text-red-500 hover:underline disabled:opacity-50"
+                >
+                  Annuler le rendez-vous
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ← Rendez-vous reçus par mon cabinet (visible seulement si role === "vet")
+function VetAppointmentsSection() {
+  const [statusFilter, setStatusFilter] = useState("");
+  const { data, isLoading } = useVetAppointments({
+    status: (statusFilter || undefined) as AppointmentStatus | undefined,
+  });
+  const updateStatus = useUpdateAppointmentStatus();
+
+  const appointments = data?.data ?? [];
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-[var(--pc-text-primary)]">
+          Rendez-vous reçus (mon cabinet)
+        </h2>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-1.5 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-xs text-[var(--pc-text-primary)] focus:outline-none"
+        >
+          <option value="">Tous les statuts</option>
+          {(Object.keys(APPT_STATUS_LABELS) as AppointmentStatus[]).map((s) => (
+            <option key={s} value={s}>
+              {APPT_STATUS_LABELS[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="glass-card rounded-2xl h-20 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : appointments.length === 0 ? (
+        <div className="glass-card rounded-2xl p-10 flex flex-col items-center gap-3 text-center">
+          <span className="text-4xl">🩺</span>
+          <p className="text-[var(--pc-text-secondary)] text-sm">
+            Aucun rendez-vous reçu pour le moment
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {appointments.map((appt) => (
+            <div key={appt.id} className="glass-card rounded-2xl p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-[var(--pc-text-primary)] text-sm">
+                    {appt.user?.name ?? "Patient"}
+                    {appt.animal?.name ? ` — ${appt.animal.name}` : ""}
+                  </p>
+                  <p className="text-xs text-[var(--pc-text-secondary)] mt-0.5">
+                    {formatApptDate(appt.appointment_date)} à{" "}
+                    {appt.appointment_time}
+                    {appt.service ? ` · ${appt.service}` : ""}
+                  </p>
+                  {appt.user?.phone && (
+                    <a
+                      href={`tel:${appt.user.phone}`}
+                      className="text-xs text-[var(--pc-primary)] hover:underline"
+                    >
+                      {appt.user.phone}
+                    </a>
+                  )}
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${APPT_STATUS_COLORS[appt.status]}`}
+                >
+                  {APPT_STATUS_LABELS[appt.status]}
+                </span>
+              </div>
+              {appt.status === "pending" && (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() =>
+                      updateStatus.mutate({ id: appt.id, status: "confirmed" })
+                    }
+                    disabled={updateStatus.isPending}
+                    className="flex-1 py-1.5 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+                    style={{ background: "var(--pc-primary)" }}
+                  >
+                    Confirmer
+                  </button>
+                  <button
+                    onClick={() =>
+                      updateStatus.mutate({ id: appt.id, status: "declined" })
+                    }
+                    disabled={updateStatus.isPending}
+                    className="flex-1 py-1.5 rounded-xl text-xs font-semibold border border-[var(--pc-border)] text-[var(--pc-text-secondary)] disabled:opacity-50"
+                  >
+                    Refuser
+                  </button>
+                </div>
+              )}
+              {appt.status === "confirmed" && (
+                <button
+                  onClick={() =>
+                    updateStatus.mutate({ id: appt.id, status: "completed" })
+                  }
+                  disabled={updateStatus.isPending}
+                  className="mt-3 text-xs font-semibold text-[var(--pc-primary)] hover:underline disabled:opacity-50"
+                >
+                  Marquer comme terminé
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AppointmentsTab({ isVet }: { isVet: boolean }) {
+  return (
+    <div>
+      <MyAppointmentsSection />
+      {isVet && <VetAppointmentsSection />}
+    </div>
+  );
+}
+
+// ─── Notifications Tab ──────────────────────────────────────────────────────────
+
 function NotificationsTab() {
   const { data, isLoading } = useNotifications();
   const { mutate: markRead } = useMarkNotificationRead();
@@ -1830,6 +2063,11 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
       badge: positiveBadge(dashData?.unread_messages),
     },
     {
+      key: "appointments",
+      icon: <Calendar size={18} />,
+      label: dashboardUser?.role === "vet" ? "Rendez-vous" : "Mes rendez-vous",
+    },
+    {
       key: "notifications",
       icon: <Bell size={18} />,
       label: "Notifications",
@@ -2012,6 +2250,9 @@ export function DashboardPage({ onBack, onNavigate }: DashboardPageProps) {
                 )}
                 {activeTab === "messages" && (
                   <MessagesTab onNavigate={onNavigate} />
+                )}
+                {activeTab === "appointments" && (
+                  <AppointmentsTab isVet={dashboardUser?.role === "vet"} />
                 )}
                 {activeTab === "notifications" && <NotificationsTab />}
                 {activeTab === "settings" && <SettingsTab />}

@@ -21,6 +21,7 @@ import {
 import { useVet } from "../../hooks/useVets";
 import { useToggleFavorite } from "../../hooks/useFavorites";
 import { useAuth } from "../../hooks/useAuth";
+import { useCreateAppointment } from "../../hooks/useAppointments";
 import ReviewsSection from "../components/reviews/ReviewsSection";
 import type { Vet } from "../../types";
 
@@ -163,6 +164,10 @@ export function VetProfilePage({
   const [showBooking, setShowBooking] = useState(false);
   const [selectedDay, setSelectedDay] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState("");
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+  const createAppointment = useCreateAppointment();
 
   // ── API ──
   const id = vetId ? Number(vetId) : 0;
@@ -212,6 +217,42 @@ export function VetProfilePage({
     }
     setSavedLocally((prev) => !prev);
     toggleFavorite({ type: "vet", id: vet.id });
+  };
+
+  const handleOpenBooking = () => {
+    if (!isLoggedIn) {
+      onNavigate("login");
+      return;
+    }
+    setBookingError("");
+    setBookingSuccess(false);
+    setSelectedService(selectedServiceName);
+    setShowBooking(true);
+  };
+
+  const handleSubmitBooking = async () => {
+    if (!selectedSlot) return;
+    setBookingError("");
+    const d = weekDays[selectedDay];
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    try {
+      await createAppointment.mutateAsync({
+        vet_id: vet.id,
+        service: selectedService ?? undefined,
+        appointment_date: dateStr,
+        appointment_time: selectedSlot,
+      });
+      setBookingSuccess(true);
+      setTimeout(() => {
+        setShowBooking(false);
+        setSelectedSlot(null);
+      }, 1800);
+    } catch (e: any) {
+      setBookingError(
+        e?.response?.data?.message ??
+          "Impossible d'envoyer la demande. Réessayez.",
+      );
+    }
   };
 
   return (
@@ -363,7 +404,7 @@ export function VetProfilePage({
       <div className="px-4 mb-6">
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => setShowBooking(true)}
+            onClick={handleOpenBooking}
             className="col-span-2 py-3 rounded-2xl font-semibold text-white text-sm flex items-center justify-center gap-2"
             style={{
               background: "linear-gradient(135deg, var(--pc-primary), #15634a)",
@@ -581,7 +622,8 @@ export function VetProfilePage({
                     Service
                   </label>
                   <select
-                    defaultValue={selectedServiceName}
+                    value={selectedService ?? selectedServiceName}
+                    onChange={(e) => setSelectedService(e.target.value)}
                     className="w-full p-3 rounded-xl border border-[var(--pc-border)] bg-[var(--pc-surface-alt)] text-sm text-[var(--pc-text-primary)]"
                   >
                     {services.map((s) => (
@@ -669,17 +711,42 @@ export function VetProfilePage({
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowBooking(false)}
-                disabled={!selectedSlot}
-                className="w-full py-3 rounded-2xl font-semibold text-white transition-opacity disabled:opacity-50"
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--pc-primary), #15634a)",
-                }}
-              >
-                Confirmer le RDV{selectedSlot ? ` à ${selectedSlot}` : ""}
-              </button>
+              {bookingSuccess ? (
+                <div className="flex flex-col items-center py-4 gap-2">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-2xl">
+                    ✅
+                  </div>
+                  <p className="font-bold text-[var(--pc-text-primary)] text-sm">
+                    Demande de RDV envoyée
+                  </p>
+                  <p className="text-xs text-[var(--pc-text-secondary)] text-center">
+                    {clinic} vous confirmera le créneau prochainement.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {bookingError && (
+                    <div className="flex items-center gap-2 text-red-400 text-sm mb-3 bg-red-500/10 rounded-xl px-3 py-2">
+                      <AlertCircle size={14} /> {bookingError}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSubmitBooking}
+                    disabled={!selectedSlot || createAppointment.isPending}
+                    className="w-full py-3 rounded-2xl font-semibold text-white transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--pc-primary), #15634a)",
+                    }}
+                  >
+                    {createAppointment.isPending ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      `Confirmer le RDV${selectedSlot ? ` à ${selectedSlot}` : ""}`
+                    )}
+                  </button>
+                </>
+              )}
 
               {phone && (
                 <a
