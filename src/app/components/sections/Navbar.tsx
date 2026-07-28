@@ -23,6 +23,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { ThemeToggle } from "../ThemeToggle";
 import { LangSelector } from "../LangSelector";
+import { useUnreadCount } from "../../../hooks/useNotifications";
+import { useUnreadMessagesCount } from "../../../hooks/useMessages";
 
 export function Navbar({
   onNavigate,
@@ -76,8 +78,10 @@ export function Navbar({
       .join("")
       .toUpperCase();
 
-  const NOTIFICATION_COUNT = 3;
-  const MESSAGE_COUNT = 2;
+  // Compteurs réels, dérivés des données de l'API (pollées par React Query).
+  // Renvoient 0 automatiquement si l'utilisateur n'est pas connecté.
+  const NOTIFICATION_COUNT = useUnreadCount();
+  const MESSAGE_COUNT = useUnreadMessagesCount();
 
   const profileMenuItems = [
     {

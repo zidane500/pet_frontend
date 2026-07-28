@@ -46,3 +46,13 @@ export function useSendMessage() {
     },
   });
 }
+
+export function useUnreadMessagesCount() {
+  const { data } = useConversations();
+  return (
+    data?.reduce(
+      (total, conversation) => total + conversation.unread_count,
+      0,
+    ) ?? 0
+  );
+}

@@ -21,59 +21,7 @@ import { TrustSafety } from "./components/sections/TrustSafety";
 import { AppDownload } from "./components/sections/AppDownload";
 import { Footer } from "./components/sections/Footer";
 import { MobileBottomNav } from "./components/sections/MobileBottomNav";
-
-function pageToPath(page: string, params?: Record<string, string>): string {
-  switch (page) {
-    case "home":
-      return "/";
-    case "search":
-      return params?.q
-        ? `/search?q=${encodeURIComponent(params.q)}${params.type ? `&type=${params.type}` : ""}`
-        : `/search${params?.type ? `?type=${params.type}` : ""}`;
-    case "feed":
-      return "/feed";
-    case "dashboard":
-      return "/dashboard";
-    case "messages":
-      return params?.userId ? `/messages/${params.userId}` : "/messages";
-    case "create-listing":
-      return "/create-listing";
-    case "pet-detail":
-      return `/listings/${params?.id ?? ""}`;
-    case "profile":
-      return params?.id ? `/profile/${params.id}` : "/profile";
-    case "notifications":
-      return "/notifications";
-    case "favorites":
-      return "/favorites";
-    case "premium":
-      return "/premium";
-    case "settings":
-      return "/settings";
-    case "vet-profile":
-      return `/vets/${params?.id ?? ""}`;
-    case "shop-profile":
-      return `/stores/${params?.id ?? ""}`;
-    case "shelter-profile":
-      return `/shelters/${params?.id ?? ""}`;
-    case "boutique":
-      return "/boutique";
-    case "cart":
-      return "/panier";
-    case "faq":
-      return "/faq";
-    case "contact":
-      return "/contact";
-    case "login":
-      return "/login";
-    case "register":
-      return "/register";
-    case "profile-setup":
-      return "/profile-setup";
-    default:
-      return "/";
-  }
-}
+import { pageToPath } from "../pageToPath";
 
 export default function App() {
   // ← Initialisation auth (une seule fois après hydratation)

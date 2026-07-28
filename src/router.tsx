@@ -38,65 +38,7 @@ import { AdminPage } from "./app/pages/AdminPage";
 import { BoutiquePage } from "./app/pages/BoutiquePage";
 import { CartPage } from "./app/pages/CartPage";
 import { ProductDetailPage } from "./app/pages/ProductDetailPage";
-
-// ─── Convertisseur page → URL ─────────────────────────────────
-
-function pageToPath(page: string, params?: Record<string, string>): string {
-  switch (page) {
-    case "home":
-      return "/";
-    case "search":
-      return params?.q
-        ? `/search?q=${encodeURIComponent(params.q)}${params.type ? `&type=${params.type}` : ""}`
-        : `/search${params?.type ? `?type=${params.type}` : ""}`;
-    case "feed":
-      return "/feed";
-    case "dashboard":
-      return "/dashboard";
-    case "messages":
-      return params?.userId ? `/messages/${params.userId}` : "/messages";
-    case "create-listing":
-      return "/create-listing";
-    case "pet-detail":
-      return `/listings/${params?.id ?? ""}`;
-    case "profile":
-      return params?.id ? `/profile/${params.id}` : "/profile";
-    case "notifications":
-      return "/notifications";
-    case "favorites":
-      return "/favorites";
-    case "premium":
-      return "/premium";
-    case "settings":
-      return "/settings";
-    case "vet-profile":
-      return `/vets/${params?.id ?? ""}`;
-    case "vets":
-      return "/vets";
-    case "shop-profile":
-      return `/stores/${params?.id ?? ""}`;
-    case "shelter-profile":
-      return `/shelters/${params?.id ?? ""}`;
-    case "boutique":
-      return "/boutique";
-    case "boutique-detail":
-      return `/boutique/${params?.id ?? ""}`;
-    case "cart":
-      return "/panier";
-    case "faq":
-      return "/faq";
-    case "contact":
-      return "/contact";
-    case "login":
-      return "/login";
-    case "register":
-      return "/register";
-    case "profile-setup":
-      return "/profile-setup";
-    default:
-      return "/";
-  }
-}
+import { pageToPath } from "./pageToPath";
 
 // ─── Hook utilitaire pour les pages ──────────────────────────────────────────
 // Fournit goBack et navigate compatibles avec l'ancien système de props
