@@ -112,6 +112,21 @@ export interface Listing {
   user?: User;
 }
 
+export interface Post {
+  id: number;
+  user_id: number;
+  content?: string | null;
+  photos?: string[] | null;
+  is_active: boolean;
+  likes_count: number;
+  comments_count: number;
+  shares_count: number;
+  is_liked_by_me?: boolean;
+  is_saved_by_me?: boolean;
+  created_at: string;
+  user?: User;
+}
+
 export interface LostFound {
   id: number;
   user_id: number;
@@ -328,7 +343,6 @@ export interface CartItem {
 
 export interface Comment {
   id: number;
-  listing_id: number;
   user_id: number;
   parent_id?: number | null;
   body: string;

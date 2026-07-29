@@ -8,51 +8,30 @@ import {
   Bookmark,
   MessageCircle,
   User,
-  SlidersHorizontal,
   X,
   PlusCircle,
   BadgeCheck,
   TrendingUp,
   RefreshCw,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PostCard } from "../components/feed/PostCard";
+import { CreatePostModal } from "../components/feed/CreatePostModal";
 import { SkeletonPost } from "../components/feed/SkeletonPost";
 import { LangSelector } from "../components/LangSelector";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { useListings, useListing } from "../../hooks/useListings";
+import { usePosts, usePost } from "../../hooks/usePosts";
 import { useFollowSuggestions, useToggleFollow } from "../../hooks/useFollows";
 import { useUnreadCount } from "../../hooks/useNotifications";
 import { useAuthStore } from "../../store/authStore";
-import type { Listing } from "../../types";
-
-// ← Uniquement les 6 vrais types de Listing (le mock en avait 3 de plus
-// qui n'existent pas dans le vrai modèle : urgence/association/vet).
-const FILTER_KEYS: (Listing["type"] | "all")[] = [
-  "all",
-  "adoption",
-  "vente",
-  "perdu",
-  "trouve",
-  "accouplement",
-  "conseils",
-];
-
-const FILTER_DOTS: Record<string, string> = {
-  all: "✨",
-  adoption: "🟢",
-  vente: "🔵",
-  perdu: "🟠",
-  trouve: "🟣",
-  accouplement: "🟡",
-  conseils: "💡",
-};
+import type { Post } from "../../types";
 
 interface FeedPageProps {
   onBack: () => void;
   onNavigate?: (page: string, params?: Record<string, string>) => void;
-  // ← Permet d'ouvrir le feed directement sur un post précis (ex: lien
-  // "Voir la fiche" depuis la file de signalements admin).
+  // ← Permet d'ouvrir le feed directement sur un post précis (ex: lien de
+  // partage /feed/:postId).
   highlightId?: number;
 }
 
@@ -60,16 +39,15 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const currentUser = useAuthStore((s) => s.user);
   const unreadNotifications = useUnreadCount();
 
-  const [activeFilter, setActiveFilter] = useState<Listing["type"] | "all">(
-    "all",
-  );
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [showComposer, setShowComposer] = useState(false);
   const [page, setPage] = useState(1);
-  const [allPosts, setAllPosts] = useState<Listing[]>([]);
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [allLoaded, setAllLoaded] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState("feed");
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -78,7 +56,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
 
   // ← Charge le post ciblé séparément de la pagination normale (il peut
   // être en page 3, 4... peu importe, on veut le voir tout de suite).
-  const { data: highlightedListing } = useListing(highlightId ?? 0);
+  const { data: highlightedPost } = usePost(highlightId ?? 0);
 
   // ← Petit debounce pour ne pas relancer une requête à chaque frappe
   useEffect(() => {
@@ -86,15 +64,14 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // ← Nouveau filtre/recherche = on repart de la page 1
+  // ← Nouvelle recherche = on repart de la page 1
   useEffect(() => {
     setPage(1);
     setAllPosts([]);
     setAllLoaded(false);
-  }, [activeFilter, debouncedSearch]);
+  }, [debouncedSearch]);
 
-  const { data, isLoading, isFetching, refetch } = useListings({
-    type: activeFilter === "all" ? undefined : activeFilter,
+  const { data, isLoading, isFetching, refetch } = usePosts({
     search: debouncedSearch || undefined,
     page,
     per_page: 5,
@@ -119,12 +96,12 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
   // ← Insère le post ciblé en tête de liste s'il n'y est pas déjà (il peut
   // très bien être hors de la première page de pagination).
   useEffect(() => {
-    if (!highlightedListing) return;
+    if (!highlightedPost) return;
     setAllPosts((prev) => {
-      if (prev.some((p) => p.id === highlightedListing.id)) return prev;
-      return [highlightedListing, ...prev];
+      if (prev.some((p) => p.id === highlightedPost.id)) return prev;
+      return [highlightedPost, ...prev];
     });
-  }, [highlightedListing]);
+  }, [highlightedPost]);
 
   // ← Une fois le post rendu dans le DOM, on scroll jusqu'à lui (une seule
   // fois, pour ne pas re-scroller à chaque re-render de la liste).
@@ -204,6 +181,15 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--pc-surface-alt)] dark:bg-[#060C12] flex overflow-x-hidden w-full">
+      <AnimatePresence>
+        {showComposer && (
+          <CreatePostModal
+            onClose={() => setShowComposer(false)}
+            onCreated={handleRefresh}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ── Desktop Left Sidebar ── */}
       <aside className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 w-64 xl:w-72 bg-[var(--pc-surface)] dark:bg-[#0D1117] border-r border-[var(--pc-border)] dark:border-[var(--pc-border)] z-40 px-4 py-6">
         <motion.div
@@ -254,6 +240,8 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
           ))}
         </nav>
 
+        {/* ← Annonce marchande (Listing) : totalement indépendante des
+        posts, inchangée. */}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
@@ -399,35 +387,40 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
               </motion.button>
             </div>
 
-            {/* Filter chips */}
-            <div
-              className="flex gap-2 overflow-x-auto pb-2 mb-4"
-              style={{
-                scrollbarWidth: "none",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              {FILTER_KEYS.map((key) => (
-                <motion.button
-                  key={key}
-                  whileTap={{ scale: 0.94 }}
-                  onClick={() => setActiveFilter(key)}
-                  className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-full font-semibold transition-all duration-200 whitespace-nowrap border ${
-                    activeFilter === key
-                      ? "bg-[var(--pc-primary)] border-[var(--pc-primary)] text-white shadow-lg shadow-[var(--pc-primary)]/25"
-                      : "bg-[var(--pc-surface)] dark:bg-[#161B22] border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)]"
-                  }`}
-                  style={{ fontSize: "13px" }}
+            {/* ← Composeur : remplace les anciens chips de type d'annonce
+            (Adoption/Vente/Perdu/Trouvé), qui n'ont plus de sens ici
+            puisqu'un Post n'a pas de type marchand. Seul un utilisateur
+            connecté peut publier. */}
+            {isLoggedIn && (
+              <button
+                onClick={() => setShowComposer(true)}
+                className={`w-full flex items-center gap-3 bg-[var(--pc-surface)] dark:bg-[#161B22] border border-[var(--pc-border)] rounded-2xl px-4 py-3 mb-4 hover:border-[var(--pc-primary)] transition-colors text-left ${isRtl ? "flex-row-reverse text-right" : ""}`}
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--pc-primary)] to-emerald-500 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  {currentUser?.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-white font-bold text-xs">
+                      {currentUser?.name?.[0]?.toUpperCase() ?? "?"}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className="flex-1 text-[var(--pc-text-secondary)]"
+                  style={{ fontSize: "14px" }}
                 >
-                  <span>{FILTER_DOTS[key]}</span>
-                  <span>
-                    {key === "all"
-                      ? t("feed.all")
-                      : t(`feed.filterTypes.${key}`)}
-                  </span>
-                </motion.button>
-              ))}
-            </div>
+                  Quoi de neuf, {currentUser?.name?.split(" ")[0] ?? ""} ?
+                </span>
+                <ImageIcon
+                  size={18}
+                  className="text-[var(--pc-text-secondary)] flex-shrink-0"
+                />
+              </button>
+            )}
 
             {/* Refresh pill (mobile) */}
             <div className="flex justify-center mb-4 lg:hidden">
@@ -455,9 +448,9 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                 </p>
               </div>
             ) : (
-              allPosts.map((listing) => (
-                <div key={listing.id} id={`post-${listing.id}`}>
-                  <PostCard listing={listing} onNavigate={onNavigate} />
+              allPosts.map((post) => (
+                <div key={post.id} id={`post-${post.id}`}>
+                  <PostCard post={post} onNavigate={onNavigate} />
                 </div>
               ))
             )}
@@ -496,7 +489,8 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
               onNavigate={onNavigate}
             />
 
-            {/* Autres publications récentes */}
+            {/* Autres publications récentes — clique = scroll direct dans
+            la liste (pas de page dédiée à un post seul) */}
             {allPosts.length > 3 && (
               <div className="bg-[var(--pc-surface)] dark:bg-[#161B22] rounded-2xl p-4 border border-[var(--pc-border)]">
                 <h3
@@ -510,7 +504,12 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                     <button
                       key={p.id}
                       onClick={() =>
-                        onNavigate?.("pet-detail", { id: String(p.id) })
+                        document
+                          .getElementById(`post-${p.id}`)
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          })
                       }
                       className={`flex gap-2 items-center w-full text-left ${isRtl ? "flex-row-reverse" : ""}`}
                     >
@@ -533,7 +532,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                           className="text-[var(--pc-text-secondary)] truncate"
                           style={{ fontSize: "11px" }}
                         >
-                          {(p.description ?? p.title).slice(0, 50)}...
+                          {(p.content ?? "").slice(0, 50)}
                         </p>
                       </div>
                     </button>
@@ -570,7 +569,11 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
             {
               key: "publish",
               icon: PlusCircle,
-              action: () => onNavigate?.("create-listing"),
+              // ← Sur mobile, le bouton central publie un post (action
+              // principale du feed) ; "Publier une annonce" reste
+              // accessible depuis la sidebar desktop et le Dashboard.
+              action: () =>
+                isLoggedIn ? setShowComposer(true) : onNavigate?.("login"),
               isPrimary: true,
             },
             {

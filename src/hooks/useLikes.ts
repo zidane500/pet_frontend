@@ -6,7 +6,12 @@ import { likesApi } from "../api/likes";
 // jour son état local de façon optimiste dans le callback onSuccess.
 export function useToggleLike() {
   return useMutation({
-    mutationFn: ({ type, id }: { type: "listing" | "comment"; id: number }) =>
-      likesApi.toggle(type, id),
+    mutationFn: ({
+      type,
+      id,
+    }: {
+      type: "listing" | "comment" | "post";
+      id: number;
+    }) => likesApi.toggle(type, id),
   });
 }

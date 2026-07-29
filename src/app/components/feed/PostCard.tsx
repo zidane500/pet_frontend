@@ -7,13 +7,10 @@ import {
   Share2,
   Bookmark,
   MoreHorizontal,
-  MapPin,
   ChevronLeft,
   ChevronRight,
   Send,
   BadgeCheck,
-  Eye,
-  ThumbsUp,
   X,
   Copy,
   Flag,
@@ -22,15 +19,16 @@ import {
   Check,
   Loader2,
   AlertCircle,
+  ThumbsUp,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { Listing, Comment as CommentType } from "../../../types";
+import type { Post, Comment as CommentType } from "../../../types";
 import { useAuthStore } from "../../../store/authStore";
 import { useToggleLike } from "../../../hooks/useLikes";
 import { useToggleFavorite } from "../../../hooks/useFavorites";
 import { useComments, useCreateComment } from "../../../hooks/useComments";
 import { useCreateReport } from "../../../hooks/useReports";
-import { listingsApi } from "../../../api/listings";
+import { postsApi } from "../../../api/posts";
 
 const REPORT_REASONS = [
   "Contenu inapproprié",
@@ -40,17 +38,19 @@ const REPORT_REASONS = [
   "Autre",
 ];
 
-// ── Share Modal (déjà très bien faite, juste branchée sur un vrai lien) ────────
+// ── Share Modal (identique à avant, juste branchée sur /feed/:postId — il
+// n'existe pas de page dédiée à un post seul, on renvoie vers le feed qui
+// scroll automatiquement dessus via highlightId) ────────
 function ShareModal({
-  listingId,
+  postId,
   onClose,
   onShared,
 }: {
-  listingId: number;
+  postId: number;
   onClose: () => void;
   onShared: () => void;
 }) {
-  const url = `${window.location.origin}/listings/${listingId}`;
+  const url = `${window.location.origin}/feed/${postId}`;
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(url).catch(() => {});
@@ -168,12 +168,14 @@ function ShareModal({
   );
 }
 
-// ── Report Modal — signale la publication via POST /reports ──
+// ── Report Modal — signale la publication via POST /reports (type "post"
+// désigne ici "un élément du feed", peu importe qu'il s'agisse d'une
+// annonce ou d'un post — c'est déjà la valeur utilisée côté backend) ──
 function ReportModal({
-  listingId,
+  postId,
   onClose,
 }: {
-  listingId: number;
+  postId: number;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -186,7 +188,7 @@ function ReportModal({
     try {
       await createReport.mutateAsync({
         type: "post",
-        id: listingId,
+        id: postId,
         reason: selected,
         details: details.trim() || undefined,
       });
@@ -309,51 +311,9 @@ function ReportModal({
   );
 }
 
-// ← Uniquement les 6 vrais types d'annonces (les mock en avaient 3 de
-// plus — urgence/association/vet — qui n'existent pas dans le vrai
-// modèle Listing).
-const TYPE_CONFIG: Record<
-  Listing["type"],
-  { label: string; text: string; bg: string; dot: string }
-> = {
-  adoption: {
-    label: "Adoption",
-    text: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-    dot: "🟢",
-  },
-  vente: {
-    label: "Vente",
-    text: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    dot: "🔵",
-  },
-  perdu: {
-    label: "Perdu",
-    text: "text-orange-600 dark:text-orange-400",
-    bg: "bg-orange-50 dark:bg-orange-900/20",
-    dot: "🟠",
-  },
-  trouve: {
-    label: "Trouvé",
-    text: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-50 dark:bg-purple-900/20",
-    dot: "🟣",
-  },
-  accouplement: {
-    label: "Accouplement",
-    text: "text-yellow-600 dark:text-yellow-400",
-    bg: "bg-yellow-50 dark:bg-yellow-900/20",
-    dot: "🟡",
-  },
-  conseils: {
-    label: "Conseils",
-    text: "text-teal-600 dark:text-teal-400",
-    bg: "bg-teal-50 dark:bg-teal-900/20",
-    dot: "💡",
-  },
-};
-
+// ← Basé sur le rôle de l'auteur (toujours pertinent : un post peut venir
+// d'un particulier, éleveur, refuge ou vétérinaire — indépendamment du
+// fait que ce ne soit plus une annonce marchande).
 const USER_TYPE_COLORS: Record<string, string> = {
   particulier: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
   eleveur:
@@ -401,21 +361,21 @@ function initials(name?: string) {
 }
 
 interface PostCardProps {
-  listing: Listing;
+  post: Post;
   onNavigate?: (page: string, params?: Record<string, string>) => void;
 }
 
-export function PostCard({ listing, onNavigate }: PostCardProps) {
+export function PostCard({ post, onNavigate }: PostCardProps) {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const queryClient = useQueryClient();
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const currentUser = useAuthStore((s) => s.user);
 
-  const [liked, setLiked] = useState(!!listing.is_liked_by_me);
-  const [likes, setLikes] = useState(listing.likes_count ?? 0);
-  const [saved, setSaved] = useState(!!listing.is_saved_by_me);
-  const [sharesCount, setSharesCount] = useState(listing.shares_count ?? 0);
+  const [liked, setLiked] = useState(!!post.is_liked_by_me);
+  const [likes, setLikes] = useState(post.likes_count ?? 0);
+  const [saved, setSaved] = useState(!!post.is_saved_by_me);
+  const [sharesCount, setSharesCount] = useState(post.shares_count ?? 0);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: number; author: string } | null>(
@@ -432,23 +392,24 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
   const toggleLike = useToggleLike();
   const toggleFavorite = useToggleFavorite();
   const { data: commentsData, isLoading: commentsLoading } = useComments(
-    listing.id,
+    "post",
+    post.id,
     showComments,
   );
-  const createComment = useCreateComment(listing.id);
+  const createComment = useCreateComment("post", post.id);
   const shareMutation = useMutation({
-    mutationFn: () => listingsApi.share(listing.id),
+    mutationFn: () => postsApi.share(post.id),
   });
 
-  const media =
-    listing.photos && listing.photos.length > 0
-      ? listing.photos
-      : [`https://picsum.photos/seed/listing-${listing.id}/600/600`];
-  const cfg = TYPE_CONFIG[listing.type] ?? TYPE_CONFIG.conseils;
+  // ← Contrairement à une annonce, un post peut être 100% textuel : pas de
+  // photo de secours forcée, le bloc média ne s'affiche que s'il y a
+  // vraiment des photos.
+  const media = post.photos ?? [];
+  const hasMedia = media.length > 0;
   const hasMore = media.length > 1;
-  const caption = listing.description ?? "";
-  const captionLong = caption.length > 120;
-  const userType = roleToUserType(listing.user?.role);
+  const caption = post.content ?? "";
+  const captionLong = caption.length > 180;
+  const userType = roleToUserType(post.user?.role);
   const comments = commentsData?.data ?? [];
 
   // ← Toute action sociale nécessite un compte ; sinon on renvoie vers /login
@@ -471,7 +432,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
       }
 
       toggleLike.mutate(
-        { type: "listing", id: listing.id },
+        { type: "post", id: post.id },
         {
           onSuccess: (data) => {
             setLiked(data.liked);
@@ -490,7 +451,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
       const wasSaved = saved;
       setSaved((v) => !v);
       toggleFavorite.mutate(
-        { type: "listing", id: listing.id },
+        { type: "post", id: post.id },
         { onError: () => setSaved(wasSaved) },
       );
     });
@@ -549,7 +510,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
             // update ici (les commentaires changent moins souvent que les
             // likes de posts).
             queryClient.invalidateQueries({
-              queryKey: ["comments", listing.id],
+              queryKey: ["comments", "post", post.id],
             });
           },
         },
@@ -561,14 +522,14 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
       <AnimatePresence>
         {showShareModal && (
           <ShareModal
-            listingId={listing.id}
+            postId={post.id}
             onClose={() => setShowShareModal(false)}
             onShared={handleShared}
           />
         )}
         {showReportModal && (
           <ReportModal
-            listingId={listing.id}
+            postId={post.id}
             onClose={() => {
               setShowReportModal(false);
               setShowMoreMenu(false);
@@ -577,6 +538,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
         )}
       </AnimatePresence>
       <motion.article
+        id={`post-${post.id}`}
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 200, damping: 24 }}
@@ -589,24 +551,24 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
             className={`flex items-center gap-3 cursor-pointer ${isRtl ? "flex-row-reverse" : ""}`}
             onClick={() =>
               onNavigate?.("profile", {
-                userId: String(listing.user?.id ?? ""),
+                userId: String(post.user?.id ?? ""),
               })
             }
           >
             <div className="relative flex-shrink-0">
               <img
                 src={
-                  listing.user?.avatar ??
-                  `https://picsum.photos/seed/user-${listing.user_id}/80/80`
+                  post.user?.avatar ??
+                  `https://picsum.photos/seed/user-${post.user_id}/80/80`
                 }
-                alt={listing.user?.name}
+                alt={post.user?.name}
                 className="w-11 h-11 rounded-full object-cover ring-2 ring-[var(--pc-border)]"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
-                    `https://picsum.photos/seed/${listing.id}/80/80`;
+                    `https://picsum.photos/seed/${post.id}/80/80`;
                 }}
               />
-              {listing.user?.is_verified && (
+              {post.user?.is_verified && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-[var(--pc-primary)] rounded-full flex items-center justify-center">
                   <BadgeCheck size={11} className="text-white" />
                 </div>
@@ -620,7 +582,7 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
                   className="font-bold text-[var(--pc-text-primary)] hover:text-[var(--pc-primary)] transition-colors"
                   style={{ fontSize: "14px" }}
                 >
-                  {listing.user?.name}
+                  {post.user?.name}
                 </span>
               </div>
               <div
@@ -631,273 +593,194 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
                 >
                   {t(`feed.userTypes.${userType}`)}
                 </span>
-                {listing.city && (
-                  <div
-                    className={`flex items-center gap-1 text-[var(--pc-text-secondary)] ${isRtl ? "flex-row-reverse" : ""}`}
-                    style={{ fontSize: "11px" }}
-                  >
-                    <MapPin size={9} />
-                    <span>{listing.city}</span>
-                  </div>
-                )}
                 <span
                   className="text-[var(--pc-text-secondary)]"
                   style={{ fontSize: "11px" }}
                 >
-                  · {timeAgo(listing.created_at)}
+                  · {timeAgo(post.created_at)}
                 </span>
               </div>
             </div>
           </div>
 
-          <div
-            className={`flex items-center gap-2 ${isRtl ? "flex-row-reverse" : ""}`}
-          >
-            <span
-              className={`hidden sm:flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[var(--pc-surface-alt)] transition-colors"
             >
-              <span>{cfg.dot}</span> {cfg.label}
-            </span>
-            <div className="relative">
-              <button
-                onClick={() => setShowMoreMenu((v) => !v)}
-                className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-[var(--pc-surface-alt)] transition-colors"
-              >
-                <MoreHorizontal
-                  size={18}
-                  className="text-[var(--pc-text-secondary)]"
-                />
-              </button>
-              <AnimatePresence>
-                {showMoreMenu && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-30"
-                      onClick={() => setShowMoreMenu(false)}
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: -8 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: -8 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-10 z-40 w-44 glass-card rounded-2xl border border-[var(--pc-border)] shadow-xl overflow-hidden"
+              <MoreHorizontal
+                size={18}
+                className="text-[var(--pc-text-secondary)]"
+              />
+            </button>
+            <AnimatePresence>
+              {showMoreMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowMoreMenu(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-10 z-40 w-44 glass-card rounded-2xl border border-[var(--pc-border)] shadow-xl overflow-hidden"
+                  >
+                    <button
+                      onClick={() => {
+                        setShowReportModal(true);
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                     >
-                      <button
-                        onClick={() => {
-                          setShowReportModal(true);
-                          setShowMoreMenu(false);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                      >
-                        <Flag size={14} /> Signaler
-                      </button>
-                      <button
-                        onClick={() => setShowMoreMenu(false)}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
-                      >
-                        <EyeOff size={14} /> Masquer
-                      </button>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard
-                            .writeText(
-                              `${window.location.origin}/listings/${listing.id}`,
-                            )
-                            .catch(() => {});
-                          setShowMoreMenu(false);
-                        }}
-                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
-                      >
-                        <Link size={14} /> Copier le lien
-                      </button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
+                      <Flag size={14} /> Signaler
+                    </button>
+                    <button
+                      onClick={() => setShowMoreMenu(false)}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
+                    >
+                      <EyeOff size={14} /> Masquer
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(
+                            `${window.location.origin}/feed/${post.id}`,
+                          )
+                          .catch(() => {});
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] transition-colors"
+                    >
+                      <Link size={14} /> Copier le lien
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        <div className="sm:hidden px-4 mb-3">
-          <span
-            className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${cfg.bg} ${cfg.text}`}
-          >
-            <span>{cfg.dot}</span> {cfg.label}
-          </span>
-        </div>
-
-        {/* Caption */}
-        <div
-          className="px-3 sm:px-4 mb-2 sm:mb-3 cursor-pointer"
-          onClick={() => onNavigate?.("pet-detail", { id: String(listing.id) })}
-        >
-          <p
-            className="font-bold text-[var(--pc-text-primary)] mb-1"
-            style={{ fontSize: "14px" }}
-          >
-            {listing.title}
-          </p>
-          <p
-            className="text-[var(--pc-text-primary)] leading-relaxed"
-            style={{ fontSize: "14px" }}
-          >
-            {captionLong && !expanded ? caption.slice(0, 120) + "..." : caption}
-          </p>
-          {captionLong && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setExpanded((v) => !v);
-              }}
-              className="text-[var(--pc-primary)] font-semibold mt-1"
-              style={{ fontSize: "13px" }}
+        {/* Caption — juste le texte du post, plus de titre/tags marchands */}
+        {caption && (
+          <div className="px-3 sm:px-4 mb-2 sm:mb-3">
+            <p
+              className="text-[var(--pc-text-primary)] leading-relaxed"
+              style={{ fontSize: "14px" }}
             >
-              {expanded ? t("feed.post.viewLess") : t("feed.post.viewMore")}
-            </button>
-          )}
-        </div>
-
-        {/* Animal info badges */}
-        {listing.species && (
-          <div className="px-3 sm:px-4 mb-2 sm:mb-3 flex flex-wrap gap-1.5">
-            {[
-              {
-                label: [listing.species, listing.breed]
-                  .filter(Boolean)
-                  .join(" · "),
-                icon: "🐾",
-              },
-              ...(listing.age_months
-                ? [
-                    {
-                      label:
-                        listing.age_months < 12
-                          ? `${listing.age_months} mois`
-                          : `${Math.floor(listing.age_months / 12)} an${listing.age_months >= 24 ? "s" : ""}`,
-                      icon: "🗓️",
-                    },
-                  ]
-                : []),
-              {
-                label: listing.is_vaccinated
-                  ? t("feed.animal.vaccinated")
-                  : t("feed.animal.notVaccinated"),
-                icon: "💉",
-              },
-              {
-                label: listing.is_sterilized
-                  ? t("feed.animal.sterilized")
-                  : t("feed.animal.notSterilized"),
-                icon: "⚕️",
-              },
-            ].map(({ label, icon }) => (
-              <span
-                key={label}
-                className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] text-[var(--pc-text-secondary)] border border-[var(--pc-border)]/60"
+              {captionLong && !expanded
+                ? caption.slice(0, 180) + "..."
+                : caption}
+            </p>
+            {captionLong && (
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="text-[var(--pc-primary)] font-semibold mt-1"
+                style={{ fontSize: "13px" }}
               >
-                <span>{icon}</span> {label}
-              </span>
-            ))}
+                {expanded ? t("feed.post.viewLess") : t("feed.post.viewMore")}
+              </button>
+            )}
           </div>
         )}
 
-        {/* Media */}
-        <div
-          className="relative bg-black/5 dark:bg-black/20 overflow-hidden w-full"
-          style={{ aspectRatio: "4/3", maxHeight: "420px" }}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={mediaIndex}
-              src={media[mediaIndex]}
-              alt="post"
-              className="w-full h-full object-cover cursor-pointer"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.25 }}
-              onClick={() =>
-                onNavigate?.("pet-detail", { id: String(listing.id) })
-              }
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  `https://picsum.photos/seed/${listing.id}${mediaIndex}/600/600`;
-              }}
-            />
-          </AnimatePresence>
+        {/* Media — uniquement si le post a des photos */}
+        {hasMedia && (
+          <div
+            className="relative bg-black/5 dark:bg-black/20 overflow-hidden w-full"
+            style={{ aspectRatio: "4/3", maxHeight: "420px" }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <AnimatePresence mode="wait">
+              <motion.img
+                key={mediaIndex}
+                src={media[mediaIndex]}
+                alt="post"
+                className="w-full h-full object-cover"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    `https://picsum.photos/seed/${post.id}${mediaIndex}/600/600`;
+                }}
+              />
+            </AnimatePresence>
 
-          <AnimatePresence>
-            {heartAnim && (
-              <motion.div
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                initial={{ scale: 0, opacity: 1 }}
-                animate={{ scale: 1.4, opacity: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.7 }}
-              >
-                <Heart
-                  size={80}
-                  className="text-red-500 fill-red-500 drop-shadow-2xl"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {hasMore && (
-            <>
-              {!isRtl ? (
-                <>
-                  <button
-                    onClick={prevMedia}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button
-                    onClick={nextMedia}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={nextMedia}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <button
-                    onClick={prevMedia}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </>
-              )}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {media.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setMediaIndex(i)}
-                    className={`rounded-full transition-all duration-300 ${i === mediaIndex ? "w-5 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/50"}`}
+            <AnimatePresence>
+              {heartAnim && (
+                <motion.div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  initial={{ scale: 0, opacity: 1 }}
+                  animate={{ scale: 1.4, opacity: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.7 }}
+                >
+                  <Heart
+                    size={80}
+                    className="text-red-500 fill-red-500 drop-shadow-2xl"
                   />
-                ))}
-              </div>
-              <div
-                className="absolute top-3 right-3 bg-black/50 text-white rounded-full px-2.5 py-0.5 backdrop-blur-sm"
-                style={{ fontSize: "11px", fontWeight: 600 }}
-              >
-                {mediaIndex + 1}/{media.length}
-              </div>
-            </>
-          )}
-        </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Stats */}
+            {hasMore && (
+              <>
+                {!isRtl ? (
+                  <>
+                    <button
+                      onClick={prevMedia}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={nextMedia}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={nextMedia}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={prevMedia}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-all backdrop-blur-sm"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  {media.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setMediaIndex(i)}
+                      className={`rounded-full transition-all duration-300 ${i === mediaIndex ? "w-5 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/50"}`}
+                    />
+                  ))}
+                </div>
+                <div
+                  className="absolute top-3 right-3 bg-black/50 text-white rounded-full px-2.5 py-0.5 backdrop-blur-sm"
+                  style={{ fontSize: "11px", fontWeight: 600 }}
+                >
+                  {mediaIndex + 1}/{media.length}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Stats — plus de compteur de vues (n'existe pas sur un Post) */}
         <div
           className={`flex items-center gap-3 px-3 sm:px-4 pt-2 sm:pt-3 pb-1 text-[var(--pc-text-secondary)] ${isRtl ? "flex-row-reverse" : ""}`}
           style={{ fontSize: "12px" }}
@@ -910,15 +793,10 @@ export function PostCard({ listing, onNavigate }: PostCardProps) {
             {fmt(likes)}
           </span>
           <span className="flex items-center gap-1">
-            <MessageCircle size={12} /> {fmt(listing.comments_count ?? 0)}
+            <MessageCircle size={12} /> {fmt(post.comments_count ?? 0)}
           </span>
           <span className="flex items-center gap-1">
             <Share2 size={12} /> {fmt(sharesCount)}
-          </span>
-          <span
-            className={`flex items-center gap-1 ${isRtl ? "" : "ml-auto"} ${isRtl ? "mr-auto" : ""}`}
-          >
-            <Eye size={12} /> {fmt(listing.views_count)}
           </span>
         </div>
 

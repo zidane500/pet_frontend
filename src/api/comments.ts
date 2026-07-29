@@ -1,23 +1,27 @@
 import client from "./client";
 import type { Comment, PaginatedResponse } from "../types";
 
+export type CommentableType = "listing" | "post";
+
 export const commentsApi = {
   getAll: async (
-    listingId: number,
+    type: CommentableType,
+    id: number,
     page = 1,
   ): Promise<PaginatedResponse<Comment>> => {
-    const res = await client.get(`/listings/${listingId}/comments`, {
+    const res = await client.get(`/${type}s/${id}/comments`, {
       params: { page },
     });
     return res.data;
   },
 
   create: async (
-    listingId: number,
+    type: CommentableType,
+    id: number,
     body: string,
     parentId?: number,
   ): Promise<Comment> => {
-    const res = await client.post(`/listings/${listingId}/comments`, {
+    const res = await client.post(`/${type}s/${id}/comments`, {
       body,
       parent_id: parentId,
     });

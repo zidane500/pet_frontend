@@ -7,7 +7,7 @@ export interface ToggleLikeResponse {
 
 export const likesApi = {
   toggle: async (
-    type: "listing" | "comment",
+    type: "listing" | "comment" | "post",
     id: number,
   ): Promise<ToggleLikeResponse> => {
     const res = await client.post("/likes", { type, id });

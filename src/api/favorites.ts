@@ -1,7 +1,7 @@
 import client from "./client";
 import type { Favorite } from "../types";
 
-export type FavoriteType = "listing" | "vet" | "pet_store";
+export type FavoriteType = "listing" | "vet" | "pet_store" | "post";
 
 export const favoritesApi = {
   getAll: async (): Promise<Favorite[]> => {
