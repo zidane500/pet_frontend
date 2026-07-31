@@ -199,7 +199,8 @@ export function CreatePostModal({ onClose, onCreated }: CreatePostModalProps) {
                 className="flex items-center gap-1.5 text-[var(--pc-primary)] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ fontSize: "13px" }}
               >
-                <ImageIcon size={16} /> Photo ({photos.length}/{MAX_PHOTOS})
+                <ImageIcon size={16} /> Ajouter photo ({photos.length}/
+                {MAX_PHOTOS})
               </button>
             </div>
 

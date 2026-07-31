@@ -8,25 +8,24 @@ import {
   PawPrint,
   Star,
   Stethoscope,
-  Store,
 } from "lucide-react";
 import { useFavorites, useToggleFavorite } from "../../hooks/useFavorites";
-import type { Favorite, Listing, PetStore, Vet } from "../../types";
+import type { Favorite, Listing, Vet } from "../../types";
 
 interface FavoritesPageProps {
   onBack: () => void;
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
-type Tab = "animals" | "vets" | "shops";
+// ← "shops" (Animaleries) retiré : fonctionnalité mise de côté, comme
+// demandé. Les posts enregistrés vivent dans leur propre page
+// (SavedPostsPage) — cette page ne concerne QUE les favoris marchands
+// (annonces/vétérinaires), séparés des posts communautaires.
+type Tab = "animals" | "vets";
 
-function morphType(
-  favorite: Favorite,
-): "listing" | "vet" | "pet_store" | "unknown" {
+function morphType(favorite: Favorite): "listing" | "vet" | "unknown" {
   const value = favorite.favoritable_type.toLowerCase();
   if (value.includes("listing")) return "listing";
-  if (value.includes("petstore") || value.includes("pet_store"))
-    return "pet_store";
   if (value.includes("vet")) return "vet";
   return "unknown";
 }
@@ -37,10 +36,6 @@ function isListing(item: Favorite["favoritable"]): item is Listing {
 
 function isVet(item: Favorite["favoritable"]): item is Vet {
   return Boolean(item && "clinic_name" in item && "doctor_name" in item);
-}
-
-function isPetStore(item: Favorite["favoritable"]): item is PetStore {
-  return Boolean(item && "store_name" in item);
 }
 
 function formatPrice(listing: Listing): string {
@@ -55,14 +50,6 @@ function firstImage(listing: Listing): string {
   return (
     listing.photos?.[0] ||
     `https://picsum.photos/seed/listing-${listing.id}/500/360`
-  );
-}
-
-function shopImage(shop: PetStore): string {
-  return (
-    shop.logo ||
-    shop.photos?.[0] ||
-    `https://picsum.photos/seed/shop-${shop.id}/500/360`
   );
 }
 
@@ -156,16 +143,10 @@ export function FavoritesPage({ onBack, onNavigate }: FavoritesPageProps) {
         (favorite) =>
           morphType(favorite) === "vet" && isVet(favorite.favoritable),
       ),
-      shops: favorites.filter(
-        (favorite) =>
-          morphType(favorite) === "pet_store" &&
-          isPetStore(favorite.favoritable),
-      ),
     };
   }, [favorites]);
 
-  const totalCount =
-    grouped.animals.length + grouped.vets.length + grouped.shops.length;
+  const totalCount = grouped.animals.length + grouped.vets.length;
   const pendingKey = toggleFavorite.variables
     ? `${toggleFavorite.variables.type}:${toggleFavorite.variables.id}`
     : null;
@@ -188,12 +169,6 @@ export function FavoritesPage({ onBack, onNavigate }: FavoritesPageProps) {
       label: "Vétérinaires",
       icon: <Stethoscope size={14} />,
       count: grouped.vets.length,
-    },
-    {
-      key: "shops",
-      label: "Animaleries",
-      icon: <Store size={14} />,
-      count: grouped.shops.length,
     },
   ];
 
@@ -377,73 +352,6 @@ export function FavoritesPage({ onBack, onNavigate }: FavoritesPageProps) {
                           <div className="flex items-center gap-2 mt-1 text-xs text-[var(--pc-text-secondary)]">
                             <Rating value={vet.rating} />
                             <span>{vet.city}</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeFavorite(favorite);
-                          }}
-                          disabled={
-                            pendingKey === key && toggleFavorite.isPending
-                          }
-                          className="w-9 h-9 rounded-full bg-red-50 text-red-500 flex items-center justify-center disabled:opacity-50"
-                          aria-label="Retirer des favoris"
-                        >
-                          {pendingKey === key && toggleFavorite.isPending ? (
-                            <Loader2 size={15} className="animate-spin" />
-                          ) : (
-                            <Heart size={16} className="fill-red-500" />
-                          )}
-                        </button>
-                      </motion.article>
-                    );
-                  })}
-                </div>
-              ))}
-
-            {activeTab === "shops" &&
-              (grouped.shops.length === 0 ? (
-                <EmptyState
-                  icon="🏪"
-                  title="Aucune animalerie sauvegardée"
-                  cta="Voir les animaleries"
-                  onClick={() => onNavigate("search", { type: "shop" })}
-                />
-              ) : (
-                <div className="space-y-3">
-                  {grouped.shops.map((favorite) => {
-                    const shop = favorite.favoritable as PetStore;
-                    const key = `pet_store:${shop.id}`;
-                    return (
-                      <motion.article
-                        key={favorite.id}
-                        layout
-                        className="glass-card rounded-2xl p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() =>
-                          onNavigate("shop-profile", { id: String(shop.id) })
-                        }
-                      >
-                        <img
-                          src={shopImage(shop)}
-                          alt={shop.store_name}
-                          className="w-14 h-14 rounded-2xl object-cover flex-shrink-0"
-                          referrerPolicy="no-referrer"
-                          onError={(event) => {
-                            (event.currentTarget as HTMLImageElement).src =
-                              `https://picsum.photos/seed/shop-${shop.id}/500/360`;
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold truncate">
-                            {shop.store_name}
-                          </p>
-                          <p className="text-sm text-[var(--pc-text-secondary)] truncate">
-                            {shop.city}
-                          </p>
-                          <div className="mt-1">
-                            <Rating value={shop.rating} />
                           </div>
                         </div>
                         <button

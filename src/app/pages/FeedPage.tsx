@@ -169,7 +169,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
       key: "saved",
       icon: Bookmark,
       label: t("feed.saved"),
-      action: () => onNavigate?.("favorites"),
+      action: () => onNavigate?.("saved-posts"),
     },
     {
       key: "profile",
@@ -668,7 +668,7 @@ function FollowSuggestionsCard({
             className={`flex items-center justify-between ${isRtl ? "flex-row-reverse" : ""}`}
           >
             <button
-              onClick={() => onNavigate?.("profile", { userId: String(s.id) })}
+              onClick={() => onNavigate?.("profile", { id: String(s.id) })}
               className={`flex items-center gap-3 text-left ${isRtl ? "flex-row-reverse" : ""}`}
             >
               <div className="relative">

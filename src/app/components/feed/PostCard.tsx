@@ -551,7 +551,7 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
             className={`flex items-center gap-3 cursor-pointer ${isRtl ? "flex-row-reverse" : ""}`}
             onClick={() =>
               onNavigate?.("profile", {
-                userId: String(post.user?.id ?? ""),
+                id: String(post.user?.id ?? ""),
               })
             }
           >

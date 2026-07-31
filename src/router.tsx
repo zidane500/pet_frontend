@@ -18,6 +18,7 @@ import { DashboardPage } from "./app/pages/DashboardPage";
 import { MessagingPage } from "./app/pages/MessagingPage";
 import { NotificationsPage } from "./app/pages/NotificationsPage";
 import { FavoritesPage } from "./app/pages/FavoritesPage";
+import { SavedPostsPage } from "./app/pages/SavedPostsPage";
 import { SettingsPage } from "./app/pages/SettingsPage";
 import { CreateListingPage } from "./app/pages/CreateListingPage";
 import { ProfileSetupPage } from "./app/pages/ProfileSetupPage";
@@ -181,6 +182,11 @@ function FavoritesPageWrapper() {
   return <FavoritesPage onBack={goBack} onNavigate={onNavigate} />;
 }
 
+function SavedPostsPageWrapper() {
+  const { goBack, onNavigate } = usePageNav();
+  return <SavedPostsPage onBack={goBack} onNavigate={onNavigate} />;
+}
+
 function SettingsPageWrapper() {
   const { goBack, onNavigate } = usePageNav();
   return <SettingsPage onBack={goBack} onNavigate={onNavigate} />;
@@ -332,6 +338,7 @@ export const router = createBrowserRouter([
           { path: "messages/:userId", element: <MessagingPageWrapper /> },
           { path: "notifications", element: <NotificationsPageWrapper /> },
           { path: "favorites", element: <FavoritesPageWrapper /> },
+          { path: "saved-posts", element: <SavedPostsPageWrapper /> },
           { path: "settings", element: <SettingsPageWrapper /> },
           { path: "create-listing", element: <CreateListingPageWrapper /> },
           { path: "profile-setup", element: <ProfileSetupPageWrapper /> },

@@ -232,7 +232,7 @@ export interface Favorite {
   user_id: number;
   favoritable_type: string;
   favoritable_id: number;
-  favoritable?: Listing | Vet | PetStore;
+  favoritable?: Listing | Vet | PetStore | Post;
   created_at: string;
 }
 

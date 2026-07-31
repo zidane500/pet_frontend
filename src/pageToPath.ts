@@ -15,7 +15,7 @@ export function pageToPath(
         ? `/search?q=${encodeURIComponent(params.q)}${params.type ? `&type=${params.type}` : ""}`
         : `/search${params?.type ? `?type=${params.type}` : ""}`;
     case "feed":
-      return "/feed";
+      return params?.postId ? `/feed/${params.postId}` : "/feed";
     case "dashboard":
       return "/dashboard";
     case "messages":
@@ -30,6 +30,8 @@ export function pageToPath(
       return "/notifications";
     case "favorites":
       return "/favorites";
+    case "saved-posts":
+      return "/saved-posts";
     case "premium":
       return "/premium";
     case "settings":
