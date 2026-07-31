@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
@@ -360,6 +360,154 @@ function initials(name?: string) {
     .toUpperCase();
 }
 
+type SocialItem =
+  | number
+  | string
+  | {
+      user_id?: number | string;
+      userId?: number | string;
+      id?: number | string;
+      user?: { id?: number | string };
+    };
+
+type PostWithSocialState = Post & {
+  is_liked_by_me?: boolean;
+  is_liked?: boolean;
+  liked_by_me?: boolean;
+  has_liked?: boolean;
+  liked?: boolean;
+  likes?: SocialItem[];
+
+  is_saved_by_me?: boolean;
+  is_saved?: boolean;
+  saved_by_me?: boolean;
+  has_saved?: boolean;
+  saved?: boolean;
+  favorites?: SocialItem[];
+};
+
+type PostLikeUpdatedDetail = {
+  postId: number;
+  liked: boolean;
+  likes_count: number;
+};
+
+type PostSaveUpdatedDetail = {
+  postId: number;
+  saved: boolean;
+};
+
+function getSocialStorageKeys(
+  kind: "like" | "save",
+  postId: number,
+  userId?: number | string | null,
+) {
+  const keys = [`animali-post-${kind}:any:${postId}`];
+
+  if (userId !== undefined && userId !== null) {
+    keys.unshift(`animali-post-${kind}:${userId}:${postId}`);
+  }
+
+  return keys;
+}
+
+function readStoredSocialState(
+  kind: "like" | "save",
+  postId: number,
+  userId?: number | string | null,
+): boolean | undefined {
+  if (typeof window === "undefined") return undefined;
+
+  for (const key of getSocialStorageKeys(kind, postId, userId)) {
+    const value = window.localStorage.getItem(key);
+    if (value === "true") return true;
+    if (value === "false") return false;
+  }
+
+  return undefined;
+}
+
+function writeStoredSocialState(
+  kind: "like" | "save",
+  postId: number,
+  userId: number | string | null | undefined,
+  value: boolean,
+) {
+  if (typeof window === "undefined") return;
+
+  for (const key of getSocialStorageKeys(kind, postId, userId)) {
+    window.localStorage.setItem(key, String(value));
+  }
+}
+
+function socialListContainsCurrentUser(
+  list: SocialItem[] | undefined,
+  userId?: number | string | null,
+) {
+  if (!userId || !Array.isArray(list)) return undefined;
+
+  const currentId = String(userId);
+
+  return list.some((item) => {
+    if (typeof item === "number" || typeof item === "string") {
+      return String(item) === currentId;
+    }
+
+    return (
+      String(item.user_id) === currentId ||
+      String(item.userId) === currentId ||
+      String(item.id) === currentId ||
+      String(item.user?.id) === currentId
+    );
+  });
+}
+
+function getPostLikedState(
+  post: Post,
+  userId?: number | string | null,
+): boolean {
+  const stored = readStoredSocialState("like", post.id, userId);
+  if (typeof stored === "boolean") return stored;
+
+  const p = post as PostWithSocialState;
+
+  if (typeof p.is_liked_by_me === "boolean") return p.is_liked_by_me;
+  if (typeof p.is_liked === "boolean") return p.is_liked;
+  if (typeof p.liked_by_me === "boolean") return p.liked_by_me;
+  if (typeof p.has_liked === "boolean") return p.has_liked;
+  if (typeof p.liked === "boolean") return p.liked;
+
+  return socialListContainsCurrentUser(p.likes, userId) ?? false;
+}
+
+function getPostSavedState(
+  post: Post,
+  userId?: number | string | null,
+): boolean {
+  const stored = readStoredSocialState("save", post.id, userId);
+  if (typeof stored === "boolean") return stored;
+
+  const p = post as PostWithSocialState;
+
+  if (typeof p.is_saved_by_me === "boolean") return p.is_saved_by_me;
+  if (typeof p.is_saved === "boolean") return p.is_saved;
+  if (typeof p.saved_by_me === "boolean") return p.saved_by_me;
+  if (typeof p.has_saved === "boolean") return p.has_saved;
+  if (typeof p.saved === "boolean") return p.saved;
+
+  return socialListContainsCurrentUser(p.favorites, userId) ?? false;
+}
+
+function dispatchPostLikeUpdated(detail: PostLikeUpdatedDetail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("post-like-updated", { detail }));
+}
+
+function dispatchPostSaveUpdated(detail: PostSaveUpdatedDetail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("post-save-updated", { detail }));
+}
+
 interface PostCardProps {
   post: Post;
   onNavigate?: (page: string, params?: Record<string, string>) => void;
@@ -372,9 +520,13 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const currentUser = useAuthStore((s) => s.user);
 
-  const [liked, setLiked] = useState(!!post.is_liked_by_me);
+  const [liked, setLiked] = useState(() =>
+    getPostLikedState(post, currentUser?.id),
+  );
   const [likes, setLikes] = useState(post.likes_count ?? 0);
-  const [saved, setSaved] = useState(!!post.is_saved_by_me);
+  const [saved, setSaved] = useState(() =>
+    getPostSavedState(post, currentUser?.id),
+  );
   const [sharesCount, setSharesCount] = useState(post.shares_count ?? 0);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -401,6 +553,19 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
     mutationFn: () => postsApi.share(post.id),
   });
 
+  // ← Quand on revient sur la page, on resynchronise le state local avec :
+  // 1) localStorage, pour garder l'état immédiatement dans ce navigateur ;
+  // 2) les champs renvoyés par le backend si disponibles.
+  useEffect(() => {
+    const nextLiked = getPostLikedState(post, currentUser?.id);
+    const nextSaved = getPostSavedState(post, currentUser?.id);
+
+    setLiked(nextLiked);
+    setLikes(post.likes_count ?? 0);
+    setSaved(nextSaved);
+    setSharesCount(post.shares_count ?? 0);
+  }, [post, currentUser?.id]);
+
   // ← Contrairement à une annonce, un post peut être 100% textuel : pas de
   // photo de secours forcée, le bloc média ne s'affiche que s'il y a
   // vraiment des photos.
@@ -424,8 +589,20 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
   const handleLike = () =>
     requireAuth(() => {
       const wasLiked = liked;
-      setLiked((v) => !v);
-      setLikes((v) => (wasLiked ? v - 1 : v + 1));
+      const nextLiked = !wasLiked;
+      const nextLikesCount = Math.max(0, wasLiked ? likes - 1 : likes + 1);
+
+      // Optimistic UI : le bouton devient rouge/gris immédiatement,
+      // sans attendre la réponse API.
+      setLiked(nextLiked);
+      setLikes(nextLikesCount);
+      writeStoredSocialState("like", post.id, currentUser?.id, nextLiked);
+      dispatchPostLikeUpdated({
+        postId: post.id,
+        liked: nextLiked,
+        likes_count: nextLikesCount,
+      });
+
       if (!wasLiked) {
         setHeartAnim(true);
         setTimeout(() => setHeartAnim(false), 700);
@@ -435,12 +612,40 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
         { type: "post", id: post.id },
         {
           onSuccess: (data) => {
-            setLiked(data.liked);
-            setLikes(data.likes_count);
+            const confirmedLiked =
+              typeof data?.liked === "boolean" ? data.liked : nextLiked;
+            const confirmedLikesCount =
+              typeof data?.likes_count === "number"
+                ? data.likes_count
+                : nextLikesCount;
+
+            setLiked(confirmedLiked);
+            setLikes(confirmedLikesCount);
+            writeStoredSocialState(
+              "like",
+              post.id,
+              currentUser?.id,
+              confirmedLiked,
+            );
+            dispatchPostLikeUpdated({
+              postId: post.id,
+              liked: confirmedLiked,
+              likes_count: confirmedLikesCount,
+            });
+
+            queryClient.invalidateQueries({ queryKey: ["posts"] });
+            queryClient.invalidateQueries({ queryKey: ["post", post.id] });
+            queryClient.invalidateQueries({ queryKey: ["favorites"] });
           },
           onError: () => {
             setLiked(wasLiked);
-            setLikes((v) => (wasLiked ? v + 1 : v - 1));
+            setLikes(likes);
+            writeStoredSocialState("like", post.id, currentUser?.id, wasLiked);
+            dispatchPostLikeUpdated({
+              postId: post.id,
+              liked: wasLiked,
+              likes_count: likes,
+            });
           },
         },
       );
@@ -449,10 +654,26 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
   const handleSave = () =>
     requireAuth(() => {
       const wasSaved = saved;
-      setSaved((v) => !v);
+      const nextSaved = !wasSaved;
+
+      setSaved(nextSaved);
+      writeStoredSocialState("save", post.id, currentUser?.id, nextSaved);
+      dispatchPostSaveUpdated({ postId: post.id, saved: nextSaved });
+
       toggleFavorite.mutate(
         { type: "post", id: post.id },
-        { onError: () => setSaved(wasSaved) },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["favorites"] });
+            queryClient.invalidateQueries({ queryKey: ["posts"] });
+            queryClient.invalidateQueries({ queryKey: ["post", post.id] });
+          },
+          onError: () => {
+            setSaved(wasSaved);
+            writeStoredSocialState("save", post.id, currentUser?.id, wasSaved);
+            dispatchPostSaveUpdated({ postId: post.id, saved: wasSaved });
+          },
+        },
       );
     });
 

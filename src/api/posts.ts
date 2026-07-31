@@ -5,6 +5,7 @@ export interface PostFilters {
   search?: string;
   page?: number;
   per_page?: number;
+  refreshKey?: number;
 }
 
 export interface CreatePostPayload {
@@ -14,7 +15,8 @@ export interface CreatePostPayload {
 
 export const postsApi = {
   getAll: async (filters?: PostFilters): Promise<PaginatedResponse<Post>> => {
-    const res = await client.get("/posts", { params: filters });
+    const { refreshKey, ...params } = filters ?? {};
+    const res = await client.get("/posts", { params });
     return res.data;
   },
 

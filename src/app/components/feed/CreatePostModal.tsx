@@ -96,7 +96,7 @@ export function CreatePostModal({ onClose, onCreated }: CreatePostModalProps) {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -106,11 +106,22 @@ export function CreatePostModal({ onClose, onCreated }: CreatePostModalProps) {
           onClick={onClose}
         />
         <motion.div
-          className="relative z-10 w-full sm:max-w-lg glass-card rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 mx-4 max-h-[90vh] overflow-y-auto"
-          initial={{ y: 60, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 60, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 28 }}
+          className="relative z-10 w-full max-w-lg glass-card rounded-3xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto"
+          initial={{
+            opacity: 0,
+            scale: 0.95,
+          }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+          }}
+          exit={{
+            opacity: 0,
+            scale: 0.95,
+          }}
+          transition={{
+            duration: 0.2,
+          }}
         >
           <div className="flex items-center justify-between mb-4">
             <h3

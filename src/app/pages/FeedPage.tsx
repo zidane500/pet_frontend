@@ -14,8 +14,10 @@ import {
   TrendingUp,
   RefreshCw,
   Image as ImageIcon,
+  Menu,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { PostCard } from "../components/feed/PostCard";
 import { CreatePostModal } from "../components/feed/CreatePostModal";
 import { SkeletonPost } from "../components/feed/SkeletonPost";
@@ -41,12 +43,15 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const currentUser = useAuthStore((s) => s.user);
   const unreadNotifications = useUnreadCount();
+  const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [allLoaded, setAllLoaded] = useState(false);
   const [activeSidebar, setActiveSidebar] = useState("feed");
@@ -71,10 +76,11 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
     setAllLoaded(false);
   }, [debouncedSearch]);
 
-  const { data, isLoading, isFetching, refetch } = usePosts({
+  const { data, isLoading, isFetching, isError, refetch } = usePosts({
     search: debouncedSearch || undefined,
     page,
     per_page: 5,
+    refreshKey,
   });
 
   // ← Accumule les pages au lieu de les remplacer (pagination infinie)
@@ -89,9 +95,22 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
   }, [data, page]);
 
   const loadMore = useCallback(() => {
-    if (isFetching || allLoaded) return;
+    // ← Ne JAMAIS charger "la suite" tant que la page 1 n'a pas fini de
+    // répondre, ni tant qu'on n'a aucun post affiché : sinon la sentinelle
+    // (visible dès que la liste est vide) peut demander la page 2 avant
+    // même que la page 1 soit revenue, ce qui vide définitivement le feed
+    // (page 2 hors limites → allLoaded=true → les vrais posts de la page 1
+    // sont ignorés).
+    if (isLoading || isFetching || allLoaded || allPosts.length === 0) return;
     setPage((p) => p + 1);
-  }, [isFetching, allLoaded]);
+  }, [isLoading, isFetching, allLoaded, allPosts.length]);
+
+  // ← Toujours la dernière version de loadMore, sans recréer l'observer à
+  // chaque changement (voir plus bas).
+  const loadMoreCallbackRef = useRef(loadMore);
+  useEffect(() => {
+    loadMoreCallbackRef.current = loadMore;
+  }, [loadMore]);
 
   // ← Insère le post ciblé en tête de liste s'il n'y est pas déjà (il peut
   // très bien être hors de la première page de pagination).
@@ -114,22 +133,32 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
     }
   }, [allPosts, highlightId]);
 
+  // ← Observer créé UNE SEULE FOIS (tableau de dépendances vide). Avant, il
+  // était recréé à chaque fois que `loadMore` changeait (donc à chaque
+  // fetch), et `IntersectionObserver.observe()` déclenche toujours un
+  // premier callback synthétique dès qu'on l'appelle sur un élément déjà
+  // visible : ça relançait loadMore() en boucle à chaque fetch, y compris
+  // pendant le tout premier chargement. En passant par une ref, on garde
+  // toujours la dernière version de loadMore sans jamais recréer l'observer.
   useEffect(() => {
-    observerRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadMore();
+        if (entries[0].isIntersecting) loadMoreCallbackRef.current();
       },
       { threshold: 0.1 },
     );
-    if (loadMoreRef.current) observerRef.current.observe(loadMoreRef.current);
-    return () => observerRef.current?.disconnect();
-  }, [loadMore]);
+    observerRef.current = observer;
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setPage(1);
     setAllPosts([]);
     setAllLoaded(false);
-    refetch();
+    setRefreshKey((prev) => prev + 1);
+    await queryClient.invalidateQueries({ queryKey: ["posts"] });
+    await refetch({ cancelRefetch: true });
   };
 
   const SIDEBAR_ITEMS: {
@@ -272,11 +301,21 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
               whileTap={{ scale: 0.9 }}
               onClick={onBack}
               className="w-9 h-9 flex items-center justify-center rounded-xl border border-[var(--pc-border)] hover:bg-[var(--pc-surface-alt)] transition-colors flex-shrink-0"
+              aria-label="Retour"
             >
               <ArrowLeft
                 size={18}
                 className={`text-[var(--pc-text-primary)] ${isRtl ? "rotate-180" : ""}`}
               />
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowMobileMenu(true)}
+              className="w-9 h-9 flex items-center justify-center rounded-xl border border-[var(--pc-border)] hover:bg-[var(--pc-surface-alt)] transition-colors flex-shrink-0"
+              aria-label="Menu"
+            >
+              <Menu size={18} className="text-[var(--pc-text-primary)]" />
             </motion.button>
 
             {showSearch ? (
@@ -306,12 +345,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
               </div>
             ) : (
               <>
-                <span
-                  className="flex-1 font-black text-[var(--pc-text-primary)]"
-                  style={{ fontFamily: "Sora, sans-serif", fontSize: "17px" }}
-                >
-                  {t("feed.title")}
-                </span>
+                <div className="flex-1" />
                 <div
                   className={`flex items-center gap-2 ${isRtl ? "flex-row-reverse" : ""}`}
                 >
@@ -328,7 +362,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                   <motion.button
                     whileTap={{ scale: 0.9 }}
                     className="relative w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[var(--pc-surface-alt)] transition-colors"
-                    onClick={() => onNavigate?.("profile")}
+                    onClick={() => onNavigate?.("notifications")}
                   >
                     <Bell
                       size={18}
@@ -383,7 +417,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                   size={16}
                   className={isFetching && page === 1 ? "animate-spin" : ""}
                 />
-                {t("feed.filters")}
+                {t("feed.refresh")}
               </motion.button>
             </div>
 
@@ -435,12 +469,37 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
                   size={14}
                   className={isFetching && page === 1 ? "animate-spin" : ""}
                 />
-                Actualiser
+                {t("feed.refresh")}
               </motion.button>
             </div>
 
             {/* Posts */}
-            {!isLoading && allPosts.length === 0 ? (
+            {isError && allPosts.length === 0 ? (
+              // ← Avant, une requête en échec (réseau, backend qui démarre
+              // à froid, etc.) tombait dans le même bloc que "0 résultat"
+              // et affichait "Aucune publication trouvée" : on ne pouvait
+              // pas distinguer un feed vide d'un chargement raté. D'où le
+              // besoin de cliquer 2 fois sur Actualiser pour "réessayer".
+              <div className="text-center py-16 text-[var(--pc-text-secondary)]">
+                <div className="text-5xl mb-4">🐾</div>
+                <p
+                  className="mb-4"
+                  style={{ fontSize: "16px", fontWeight: 600 }}
+                >
+                  {t("feed.loadError")}
+                </p>
+                <motion.button
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={handleRefresh}
+                  className="inline-flex items-center gap-2 bg-[var(--pc-primary)] text-white px-4 py-2 rounded-full shadow-lg shadow-[var(--pc-primary)]/30"
+                  style={{ fontSize: "13px", fontWeight: 600 }}
+                >
+                  <RefreshCw size={14} />
+                  {t("feed.retry")}
+                </motion.button>
+              </div>
+            ) : !isLoading && !isFetching && allPosts.length === 0 ? (
               <div className="text-center py-16 text-[var(--pc-text-secondary)]">
                 <div className="text-5xl mb-4">🐾</div>
                 <p style={{ fontSize: "16px", fontWeight: 600 }}>
@@ -456,7 +515,7 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
             )}
 
             {/* Skeleton loaders */}
-            {(isLoading || (isFetching && page > 1)) && (
+            {(isLoading || isFetching) && (
               <>
                 <SkeletonPost />
                 <SkeletonPost />
@@ -552,70 +611,89 @@ export function FeedPage({ onBack, onNavigate, highlightId }: FeedPageProps) {
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-4 left-3 right-3 z-50">
-        <div
-          className={`flex items-center justify-around px-2 py-2.5 rounded-[28px] shadow-2xl ${isRtl ? "flex-row-reverse" : ""}`}
-          style={{
-            background: "rgba(255,255,255,0.92)",
-            backdropFilter: "blur(24px)",
-            border: "1px solid rgba(255,255,255,0.3)",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-          }}
-        >
-          {[
-            { key: "home", icon: Home, action: onBack },
-            { key: "feed", icon: TrendingUp, action: () => {} },
-            {
-              key: "publish",
-              icon: PlusCircle,
-              // ← Sur mobile, le bouton central publie un post (action
-              // principale du feed) ; "Publier une annonce" reste
-              // accessible depuis la sidebar desktop et le Dashboard.
-              action: () =>
-                isLoggedIn ? setShowComposer(true) : onNavigate?.("login"),
-              isPrimary: true,
-            },
-            {
-              key: "messages",
-              icon: MessageCircle,
-              action: () => onNavigate?.("messages"),
-            },
-            {
-              key: "profile",
-              icon: User,
-              action: () => onNavigate?.("profile"),
-            },
-          ].map(({ key, icon: Icon, action, isPrimary }) => {
-            const isActive = key === "feed";
-            if (isPrimary) {
-              return (
-                <motion.button
-                  key={key}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={action}
-                  className="flex flex-col items-center -mt-7"
+      <AnimatePresence>
+        {showMobileMenu && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="lg:hidden fixed inset-0 z-40 bg-black/40"
+              onClick={() => setShowMobileMenu(false)}
+            />
+            <motion.aside
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", stiffness: 260, damping: 28 }}
+              className="lg:hidden fixed left-0 top-0 bottom-0 z-50 w-72 max-w-[85vw] bg-[var(--pc-surface)] dark:bg-[#0D1117] border-r border-[var(--pc-border)] p-4 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">🐾</span>
+                  <span
+                    className="font-black bg-gradient-to-r from-[var(--pc-primary)] to-emerald-500 bg-clip-text text-transparent"
+                    style={{ fontFamily: "Sora, sans-serif", fontSize: "18px" }}
+                  >
+                    Animali<span className="text-[var(--pc-accent)]">.tn</span>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowMobileMenu(false)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl border border-[var(--pc-border)] hover:bg-[var(--pc-surface-alt)] transition-colors"
                 >
-                  <div className="w-14 h-14 rounded-2xl gradient-btn flex items-center justify-center shadow-xl">
-                    <Icon size={22} className="text-white" />
-                  </div>
-                </motion.button>
-              );
-            }
-            return (
-              <motion.button
-                key={key}
-                whileTap={{ scale: 0.85 }}
-                onClick={action}
-                className={`flex flex-col items-center gap-1 px-3 py-1 rounded-2xl ${isActive ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)]"}`}
-              >
-                <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
-              </motion.button>
-            );
-          })}
-        </div>
-      </nav>
-      <div className="lg:hidden h-24" />
+                  <X size={18} className="text-[var(--pc-text-primary)]" />
+                </button>
+              </div>
+
+              <nav className="space-y-1">
+                {SIDEBAR_ITEMS.map(
+                  ({ key, icon: Icon, label, action, badge }) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        action();
+                        setShowMobileMenu(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 ${
+                        activeSidebar === key && key !== "home"
+                          ? "bg-[var(--pc-primary-light)] dark:bg-[var(--pc-primary-light)]/20 text-[var(--pc-primary)]"
+                          : "text-[var(--pc-text-secondary)] hover:bg-[var(--pc-surface-alt)] dark:hover:bg-[#1C2128] hover:text-[var(--pc-text-primary)]"
+                      } ${isRtl ? "flex-row-reverse" : ""}`}
+                    >
+                      <div className="relative">
+                        <Icon
+                          size={20}
+                          strokeWidth={activeSidebar === key ? 2.5 : 1.8}
+                        />
+                        {badge && badge > 0 ? (
+                          <span
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center font-bold"
+                            style={{ fontSize: "9px" }}
+                          >
+                            {badge}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span
+                        className="font-semibold"
+                        style={{ fontSize: "15px" }}
+                      >
+                        {label}
+                      </span>
+                    </button>
+                  ),
+                )}
+              </nav>
+
+              <div className="absolute bottom-4 left-4 right-4 pt-4 border-t border-[var(--pc-border)] flex items-center justify-between">
+                <ThemeToggle />
+                <LangSelector direction="up" />
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -668,7 +746,7 @@ function FollowSuggestionsCard({
             className={`flex items-center justify-between ${isRtl ? "flex-row-reverse" : ""}`}
           >
             <button
-              onClick={() => onNavigate?.("profile", { id: String(s.id) })}
+              onClick={() => onNavigate?.("profile", { userId: String(s.id) })}
               className={`flex items-center gap-3 text-left ${isRtl ? "flex-row-reverse" : ""}`}
             >
               <div className="relative">
