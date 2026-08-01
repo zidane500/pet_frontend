@@ -173,8 +173,8 @@ function MessagingPageWrapper() {
 }
 
 function NotificationsPageWrapper() {
-  const { goBack } = usePageNav();
-  return <NotificationsPage onBack={goBack} />;
+  const { goBack, onNavigate } = usePageNav();
+  return <NotificationsPage onBack={goBack} onNavigate={onNavigate} />;
 }
 
 function FavoritesPageWrapper() {

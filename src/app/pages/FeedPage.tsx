@@ -23,6 +23,7 @@ import { CreatePostModal } from "../components/feed/CreatePostModal";
 import { SkeletonPost } from "../components/feed/SkeletonPost";
 import { LangSelector } from "../components/LangSelector";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { UserAvatar } from "../components/UserAvatar";
 import { usePosts, usePost } from "../../hooks/usePosts";
 import { useFollowSuggestions, useToggleFollow } from "../../hooks/useFollows";
 import { useUnreadCount } from "../../hooks/useNotifications";
@@ -750,13 +751,7 @@ function FollowSuggestionsCard({
               className={`flex items-center gap-3 text-left ${isRtl ? "flex-row-reverse" : ""}`}
             >
               <div className="relative">
-                <img
-                  src={
-                    s.avatar ?? `https://picsum.photos/seed/sugg-${s.id}/80/80`
-                  }
-                  alt={s.name}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
+                <UserAvatar name={s.name} avatar={s.avatar} size={40} />
                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[var(--pc-primary)] rounded-full flex items-center justify-center">
                   <BadgeCheck size={9} className="text-white" />
                 </div>

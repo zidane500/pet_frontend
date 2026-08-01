@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { UserAvatar } from "../UserAvatar";
 import {
   Heart,
   MessageCircle,
@@ -528,6 +529,7 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
     getPostSavedState(post, currentUser?.id),
   );
   const [sharesCount, setSharesCount] = useState(post.shares_count ?? 0);
+  const [commentsCount, setCommentsCount] = useState(post.comments_count ?? 0);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState<{ id: number; author: string } | null>(
@@ -564,6 +566,7 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
     setLikes(post.likes_count ?? 0);
     setSaved(nextSaved);
     setSharesCount(post.shares_count ?? 0);
+    setCommentsCount(post.comments_count ?? 0);
   }, [post, currentUser?.id]);
 
   // ← Contrairement à une annonce, un post peut être 100% textuel : pas de
@@ -715,6 +718,7 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
           onSuccess: () => {
             setCommentText("");
             setReplyTo(null);
+            setCommentsCount((c) => c + 1);
           },
         },
       );
@@ -777,17 +781,11 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
             }
           >
             <div className="relative flex-shrink-0">
-              <img
-                src={
-                  post.user?.avatar ??
-                  `https://picsum.photos/seed/user-${post.user_id}/80/80`
-                }
-                alt={post.user?.name}
-                className="w-11 h-11 rounded-full object-cover ring-2 ring-[var(--pc-border)]"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    `https://picsum.photos/seed/${post.id}/80/80`;
-                }}
+              <UserAvatar
+                name={post.user?.name}
+                avatar={post.user?.avatar}
+                size={44}
+                className="ring-2 ring-[var(--pc-border)]"
               />
               {post.user?.is_verified && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-[var(--pc-primary)] rounded-full flex items-center justify-center">
@@ -1014,7 +1012,7 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
             {fmt(likes)}
           </span>
           <span className="flex items-center gap-1">
-            <MessageCircle size={12} /> {fmt(post.comments_count ?? 0)}
+            <MessageCircle size={12} /> {fmt(commentsCount)}
           </span>
           <span className="flex items-center gap-1">
             <Share2 size={12} /> {fmt(sharesCount)}
@@ -1085,220 +1083,254 @@ export function PostCard({ post, onNavigate }: PostCardProps) {
               transition={{ duration: 0.3 }}
               className="overflow-hidden"
             >
-              <div className="px-4 pb-4 space-y-3 border-t border-[var(--pc-border)]/40 pt-3">
-                {commentsLoading && (
-                  <div className="flex justify-center py-3">
-                    <Loader2
-                      size={18}
-                      className="animate-spin text-[var(--pc-text-secondary)]"
-                    />
-                  </div>
-                )}
-
-                {!commentsLoading && comments.length === 0 && (
-                  <p
-                    className="text-center text-[var(--pc-text-secondary)] py-2"
-                    style={{ fontSize: "13px" }}
-                  >
-                    Aucun commentaire — soyez le premier à réagir !
-                  </p>
-                )}
-
-                {comments.map((comment: CommentType) => (
-                  <div
-                    key={comment.id}
-                    className={`flex gap-3 ${isRtl ? "flex-row-reverse" : ""}`}
-                  >
-                    <img
-                      src={
-                        comment.user?.avatar ??
-                        `https://picsum.photos/seed/c${comment.id}/60/60`
-                      }
-                      alt={comment.user?.name}
-                      className="w-8 h-8 rounded-full flex-shrink-0 object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={`bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-2xl px-3 py-2 ${isRtl ? "text-right" : ""}`}
-                      >
-                        <span
-                          className="font-bold text-[var(--pc-text-primary)]"
-                          style={{ fontSize: "12px" }}
-                        >
-                          {comment.user?.name}{" "}
-                        </span>
-                        <span
-                          className="text-[var(--pc-text-primary)]"
-                          style={{ fontSize: "13px" }}
-                        >
-                          {comment.body}
-                        </span>
-                      </div>
-                      <div
-                        className={`flex items-center gap-3 mt-1 px-1 ${isRtl ? "flex-row-reverse" : ""}`}
-                        style={{ fontSize: "11px" }}
-                      >
-                        <span className="text-[var(--pc-text-secondary)]">
-                          {timeAgo(comment.created_at)}
-                        </span>
-                        <button
-                          onClick={() => handleCommentLike(comment.id)}
-                          className={`hover:text-[var(--pc-primary)] font-semibold flex items-center gap-1 transition-colors ${comment.is_liked_by_me ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)]"}`}
-                        >
-                          <ThumbsUp
-                            size={11}
-                            className={
-                              comment.is_liked_by_me
-                                ? "fill-[var(--pc-primary)]"
-                                : ""
-                            }
-                          />{" "}
-                          {comment.likes_count}
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleReply(comment.id, comment.user?.name ?? "")
-                          }
-                          className="text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] font-semibold transition-colors"
-                        >
-                          Répondre @{comment.user?.name}
-                        </button>
-                      </div>
-                      {comment.replies?.map((reply) => (
-                        <div
-                          key={reply.id}
-                          className={`flex gap-2 mt-2 ${isRtl ? "flex-row-reverse" : "ml-2"}`}
-                        >
-                          <img
-                            src={
-                              reply.user?.avatar ??
-                              `https://picsum.photos/seed/r${reply.id}/60/60`
-                            }
-                            alt={reply.user?.name}
-                            className="w-6 h-6 rounded-full flex-shrink-0 object-cover"
-                          />
-                          <div className="flex-1">
-                            <div
-                              className={`bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-xl px-3 py-1.5 ${isRtl ? "text-right" : ""}`}
-                            >
-                              <span
-                                className="font-bold text-[var(--pc-text-primary)]"
-                                style={{ fontSize: "11px" }}
-                              >
-                                {reply.user?.name}{" "}
-                              </span>
-                              <span
-                                className="text-[var(--pc-text-primary)]"
-                                style={{ fontSize: "12px" }}
-                              >
-                                {reply.body}
-                              </span>
-                            </div>
-                            <div
-                              className={`flex items-center gap-3 mt-1 px-1 ${isRtl ? "flex-row-reverse" : ""}`}
-                              style={{ fontSize: "10px" }}
-                            >
-                              <span className="text-[var(--pc-text-secondary)]">
-                                {timeAgo(reply.created_at)}
-                              </span>
-                              <button
-                                onClick={() => handleCommentLike(reply.id)}
-                                className={`hover:text-[var(--pc-primary)] font-semibold flex items-center gap-1 transition-colors ${reply.is_liked_by_me ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)]"}`}
-                              >
-                                <ThumbsUp
-                                  size={10}
-                                  className={
-                                    reply.is_liked_by_me
-                                      ? "fill-[var(--pc-primary)]"
-                                      : ""
-                                  }
-                                />{" "}
-                                {reply.likes_count}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Comment input */}
-                <div
-                  className={`flex gap-2 items-start ${isRtl ? "flex-row-reverse" : ""}`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--pc-primary)] to-emerald-500 flex items-center justify-center flex-shrink-0 mt-1 overflow-hidden">
-                    {currentUser?.avatar ? (
-                      <img
-                        src={currentUser.avatar}
-                        alt=""
-                        className="w-full h-full object-cover"
+              <div className="border-t border-[var(--pc-border)]/40">
+                <div className="px-4 pt-3 pb-3 space-y-3 max-h-80 overflow-y-auto">
+                  {commentsLoading && (
+                    <div className="flex justify-center py-3">
+                      <Loader2
+                        size={18}
+                        className="animate-spin text-[var(--pc-text-secondary)]"
                       />
-                    ) : (
-                      <span
-                        className="text-white font-bold"
-                        style={{ fontSize: "12px" }}
-                      >
-                        {initials(currentUser?.name)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 flex flex-col gap-1">
-                    <AnimatePresence>
-                      {replyTo && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="flex items-center gap-1.5 bg-[var(--pc-primary)]/10 rounded-lg px-2 py-1"
+                    </div>
+                  )}
+
+                  {!commentsLoading && comments.length === 0 && (
+                    <p
+                      className="text-center text-[var(--pc-text-secondary)] py-2"
+                      style={{ fontSize: "13px" }}
+                    >
+                      Aucun commentaire — soyez le premier à réagir !
+                    </p>
+                  )}
+
+                  {comments.map((comment: CommentType) => (
+                    <div
+                      key={comment.id}
+                      className={`flex gap-3 ${isRtl ? "flex-row-reverse" : ""}`}
+                    >
+                      <UserAvatar
+                        name={comment.user?.name}
+                        avatar={comment.user?.avatar}
+                        size={32}
+                        className="flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={`bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-2xl px-3 py-2 ${isRtl ? "text-right" : ""}`}
                         >
                           <span
-                            className="text-[var(--pc-primary)] font-semibold"
-                            style={{ fontSize: "11px" }}
+                            className="font-bold text-[var(--pc-text-primary)]"
+                            style={{ fontSize: "12px" }}
                           >
-                            @{replyTo.author}
+                            {comment.user?.name}{" "}
+                          </span>
+                          <span
+                            className="text-[var(--pc-text-primary)]"
+                            style={{ fontSize: "13px" }}
+                          >
+                            {comment.body}
+                          </span>
+                        </div>
+                        <div
+                          className={`flex items-center gap-3 mt-1 px-1 ${isRtl ? "flex-row-reverse" : ""}`}
+                          style={{ fontSize: "11px" }}
+                        >
+                          <span className="text-[var(--pc-text-secondary)]">
+                            {timeAgo(comment.created_at)}
                           </span>
                           <button
-                            onClick={handleClearReply}
-                            className="ml-auto text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)] transition-colors"
+                            onClick={() => handleCommentLike(comment.id)}
+                            className={`hover:text-[var(--pc-primary)] font-semibold flex items-center gap-1 transition-colors ${comment.is_liked_by_me ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)]"}`}
                           >
-                            <X size={11} />
+                            <ThumbsUp
+                              size={11}
+                              className={
+                                comment.is_liked_by_me
+                                  ? "fill-[var(--pc-primary)]"
+                                  : ""
+                              }
+                            />{" "}
+                            {comment.likes_count}
                           </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                    <div
-                      className={`flex items-center gap-2 bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-2xl px-3 py-2 border border-[var(--pc-border)]/60 ${isRtl ? "flex-row-reverse" : ""}`}
-                    >
-                      <input
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSubmitComment();
-                        }}
-                        placeholder={
-                          isLoggedIn
-                            ? t("feed.comments.placeholder")
-                            : "Connectez-vous pour commenter"
-                        }
-                        disabled={!isLoggedIn || createComment.isPending}
-                        className="flex-1 bg-transparent text-[var(--pc-text-primary)] placeholder-[var(--pc-text-secondary)] focus:outline-none disabled:opacity-60"
-                        style={{ fontSize: "13px" }}
-                      />
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        className="text-[var(--pc-primary)] disabled:opacity-40"
-                        disabled={
-                          !commentText.trim() || createComment.isPending
-                        }
-                        onClick={handleSubmitComment}
-                      >
-                        {createComment.isPending ? (
-                          <Loader2 size={15} className="animate-spin" />
-                        ) : (
-                          <Send size={15} />
+                          <button
+                            onClick={() =>
+                              handleReply(comment.id, comment.user?.name ?? "")
+                            }
+                            className="text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] font-semibold transition-colors"
+                          >
+                            Répondre
+                          </button>
+                        </div>
+                        {comment.replies && comment.replies.length > 0 && (
+                          <div
+                            className={`mt-2 space-y-2 border-[var(--pc-border)] ${
+                              isRtl
+                                ? "mr-4 pr-3 border-r-2"
+                                : "ml-4 pl-3 border-l-2"
+                            }`}
+                          >
+                            {comment.replies.map((reply) => (
+                              <div
+                                key={reply.id}
+                                className={`relative flex gap-2 ${isRtl ? "flex-row-reverse" : ""}`}
+                              >
+                                <span
+                                  className={`absolute top-3 h-px bg-[var(--pc-border)] ${
+                                    isRtl ? "-right-3 w-3" : "-left-3 w-3"
+                                  }`}
+                                />
+                                <UserAvatar
+                                  name={reply.user?.name}
+                                  avatar={reply.user?.avatar}
+                                  size={24}
+                                  className="flex-shrink-0"
+                                />
+                                <div className="flex-1">
+                                  <div
+                                    className={`bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-xl px-3 py-1.5 ${isRtl ? "text-right" : ""}`}
+                                  >
+                                    <span
+                                      className="font-bold text-[var(--pc-text-primary)]"
+                                      style={{ fontSize: "11px" }}
+                                    >
+                                      {reply.user?.name}{" "}
+                                    </span>
+                                    <span
+                                      className="text-[var(--pc-text-primary)]"
+                                      style={{ fontSize: "12px" }}
+                                    >
+                                      {reply.body}
+                                    </span>
+                                  </div>
+                                  <div
+                                    className={`flex items-center gap-3 mt-1 px-1 ${isRtl ? "flex-row-reverse" : ""}`}
+                                    style={{ fontSize: "10px" }}
+                                  >
+                                    <span className="text-[var(--pc-text-secondary)]">
+                                      {timeAgo(reply.created_at)}
+                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        handleCommentLike(reply.id)
+                                      }
+                                      className={`hover:text-[var(--pc-primary)] font-semibold flex items-center gap-1 transition-colors ${reply.is_liked_by_me ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)]"}`}
+                                    >
+                                      <ThumbsUp
+                                        size={10}
+                                        className={
+                                          reply.is_liked_by_me
+                                            ? "fill-[var(--pc-primary)]"
+                                            : ""
+                                        }
+                                      />{" "}
+                                      {reply.likes_count}
+                                    </button>
+                                    {/* ← Rattachée au commentaire de premier niveau
+                                  (comment.id), pas à reply.id : le backend
+                                  n'autorise qu'un seul niveau de réponses.
+                                  On garde quand même le "@nom" pour indiquer
+                                  clairement à qui on répond, comme Instagram. */}
+                                    <button
+                                      onClick={() =>
+                                        handleReply(
+                                          comment.id,
+                                          reply.user?.name ?? "",
+                                        )
+                                      }
+                                      className="text-[var(--pc-text-secondary)] hover:text-[var(--pc-primary)] font-semibold transition-colors"
+                                    >
+                                      Répondre
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         )}
-                      </motion.button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Comment input — reste visible en bas, hors de la zone de
+                    scroll des commentaires, comme sur Facebook */}
+                <div className="px-4 pb-4 pt-3 border-t border-[var(--pc-border)]/40">
+                  <div
+                    className={`flex gap-2 items-start ${isRtl ? "flex-row-reverse" : ""}`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--pc-primary)] to-emerald-500 flex items-center justify-center flex-shrink-0 mt-1 overflow-hidden">
+                      {currentUser?.avatar ? (
+                        <img
+                          src={currentUser.avatar}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          className="text-white font-bold"
+                          style={{ fontSize: "12px" }}
+                        >
+                          {initials(currentUser?.name)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-1">
+                      <AnimatePresence>
+                        {replyTo && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="flex items-center gap-1.5 bg-[var(--pc-primary)]/10 rounded-lg px-2 py-1"
+                          >
+                            <span
+                              className="text-[var(--pc-primary)] font-semibold"
+                              style={{ fontSize: "11px" }}
+                            >
+                              @{replyTo.author}
+                            </span>
+                            <button
+                              onClick={handleClearReply}
+                              className="ml-auto text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)] transition-colors"
+                            >
+                              <X size={11} />
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <div
+                        className={`flex items-center gap-2 bg-[var(--pc-surface-alt)] dark:bg-[#1C2128] rounded-2xl px-3 py-2 border border-[var(--pc-border)]/60 ${isRtl ? "flex-row-reverse" : ""}`}
+                      >
+                        <input
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSubmitComment();
+                          }}
+                          placeholder={
+                            isLoggedIn
+                              ? t("feed.comments.placeholder")
+                              : "Connectez-vous pour commenter"
+                          }
+                          disabled={!isLoggedIn || createComment.isPending}
+                          className="flex-1 bg-transparent text-[var(--pc-text-primary)] placeholder-[var(--pc-text-secondary)] focus:outline-none disabled:opacity-60"
+                          style={{ fontSize: "13px" }}
+                        />
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          className="text-[var(--pc-primary)] disabled:opacity-40"
+                          disabled={
+                            !commentText.trim() || createComment.isPending
+                          }
+                          onClick={handleSubmitComment}
+                        >
+                          {createComment.isPending ? (
+                            <Loader2 size={15} className="animate-spin" />
+                          ) : (
+                            <Send size={15} />
+                          )}
+                        </motion.button>
+                      </div>
                     </div>
                   </div>
                 </div>

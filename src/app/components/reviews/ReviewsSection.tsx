@@ -4,6 +4,7 @@ import { Star, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../../hooks/useAuth";
 import { useCreateReview, useDeleteReview } from "../../../hooks/useReviews";
+import { UserAvatar } from "../UserAvatar";
 import type { Review } from "../../../types";
 
 interface ReviewsSectionProps {
@@ -80,7 +81,8 @@ export default function ReviewsSection({
   const createReview = useCreateReview();
   const deleteReview = useDeleteReview();
 
-  const numericRating = typeof rating === "string" ? parseFloat(rating) : rating;
+  const numericRating =
+    typeof rating === "string" ? parseFloat(rating) : rating;
   const myReview = reviews.find((r) => r.user_id === user?.id);
   const otherReviews = reviews.filter((r) => r.user_id !== user?.id);
 
@@ -99,7 +101,8 @@ export default function ReviewsSection({
   // à 70/20/7/3%).
   const breakdown = [5, 4, 3, 2, 1].map((star) => {
     const count = reviews.filter((r) => Math.round(r.rating) === star).length;
-    const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0;
+    const pct =
+      reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0;
     return { star, pct };
   });
 
@@ -118,7 +121,8 @@ export default function ReviewsSection({
       });
     } catch (e: any) {
       setError(
-        e?.response?.data?.message ?? "Impossible d'enregistrer votre avis. Réessayez.",
+        e?.response?.data?.message ??
+          "Impossible d'enregistrer votre avis. Réessayez.",
       );
     }
   };
@@ -230,13 +234,10 @@ export default function ReviewsSection({
             key={review.id}
             className={`glass-card p-3 rounded-2xl flex gap-3 ${isRTL ? "flex-row-reverse" : ""}`}
           >
-            <img
-              src={
-                review.user?.avatar ??
-                `https://picsum.photos/seed/rev${review.id}/60/60`
-              }
-              alt={review.user?.name}
-              className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+            <UserAvatar
+              name={review.user?.name}
+              avatar={review.user?.avatar}
+              size={36}
             />
             <div className={`flex-1 min-w-0 ${isRTL ? "text-right" : ""}`}>
               <div className="flex items-center justify-between gap-2">

@@ -67,6 +67,8 @@ export interface User {
   is_verified: boolean;
   is_active: boolean;
   locale: string;
+  notification_preferences?: Record<string, boolean> | null;
+  privacy?: Record<string, boolean> | null;
   created_at: string;
 }
 
@@ -213,8 +215,8 @@ export interface AppNotificationData {
   title?: string;
   body?: string;
   icon?: string;
-  category?: "messages" | "annonces" | "adoptions" | "systeme";
-  action_type?: "message" | "listing" | "profile" | "none";
+  category?: "messages" | "annonces" | "adoptions" | "communaute" | "systeme";
+  action_type?: "message" | "listing" | "post" | "product" | "profile" | "none";
   action_id?: number | string | null;
   avatar?: string | null;
 }

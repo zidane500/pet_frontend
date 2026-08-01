@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 
 import { useTranslation } from "react-i18next";
@@ -13,9 +13,20 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Camera,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import client from "../../api/client";
+import { uploadApi } from "../../api/upload";
+import { UserAvatar } from "../components/UserAvatar";
+
+const AVATAR_ACCEPTED_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
+const AVATAR_MAX_SIZE = 5 * 1024 * 1024; // 5 Mo (aligné sur UploadController::store, max:5120)
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -39,6 +50,7 @@ interface NotifPrefs {
   messages: boolean;
   favorites: boolean;
   new_listings: boolean;
+  posts: boolean;
   lost_found: boolean;
   promotions: boolean;
 }
@@ -84,6 +96,10 @@ function ProfileTab({ onSaved }: { onSaved: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState<ProfileForm>({
     name: user?.name ?? "",
     email: user?.email ?? "",
@@ -104,6 +120,41 @@ function ProfileTab({ onSaved }: { onSaved: () => void }) {
       });
     }
   }, [user]);
+
+  const handleAvatarClick = () => {
+    if (avatarUploading) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permet de re-choisir le même fichier ensuite
+    if (!file) return;
+
+    if (!AVATAR_ACCEPTED_TYPES.includes(file.type)) {
+      setAvatarError("Format non supporté (JPG, PNG ou WEBP uniquement).");
+      return;
+    }
+    if (file.size > AVATAR_MAX_SIZE) {
+      setAvatarError("L'image ne doit pas dépasser 5 Mo.");
+      return;
+    }
+
+    setAvatarError(null);
+    setAvatarUploading(true);
+    try {
+      const { url } = await uploadApi.upload(file, "avatars");
+      const { data } = await client.put("/profile", { avatar: url });
+      updateUser(data.user ?? data);
+      onSaved();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ?? "Erreur lors de l'envoi de la photo.";
+      setAvatarError(msg);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -132,6 +183,41 @@ function ProfileTab({ onSaved }: { onSaved: () => void }) {
 
   return (
     <div className="space-y-4">
+      {/* Photo de profil */}
+      <div className="flex flex-col items-center gap-2 pb-2">
+        <div className="relative">
+          <UserAvatar name={user?.name} avatar={user?.avatar} size={96} />
+          <button
+            type="button"
+            onClick={handleAvatarClick}
+            disabled={avatarUploading}
+            aria-label="Changer la photo de profil"
+            className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[var(--pc-primary)] text-white flex items-center justify-center shadow-md border-2 border-[var(--pc-surface)] disabled:opacity-60"
+          >
+            {avatarUploading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Camera size={14} />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleAvatarChange}
+            className="hidden"
+          />
+        </div>
+        <p className="text-xs text-[var(--pc-text-secondary)]">
+          JPG, PNG ou WEBP · 5 Mo max
+        </p>
+        {avatarError && (
+          <p className="text-red-500 text-xs bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
+            {avatarError}
+          </p>
+        )}
+      </div>
+
       <Field
         label="Nom complet"
         value={form.name}
@@ -322,15 +408,32 @@ function SecurityTab({ onSaved }: { onSaved: () => void }) {
 
 // ── Onglet Notifications ───────────────────────────────────────
 
+const DEFAULT_NOTIF_PREFS: NotifPrefs = {
+  messages: true,
+  favorites: true,
+  new_listings: false,
+  posts: true,
+  lost_found: true,
+  promotions: false,
+};
+
 function NotificationsTab({ onSaved }: { onSaved: () => void }) {
-  const [prefs, setPrefs] = useState<NotifPrefs>({
-    messages: true,
-    favorites: true,
-    new_listings: false,
-    lost_found: true,
-    promotions: false,
-  });
+  const { user, updateUser } = useAuth();
+  const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_NOTIF_PREFS);
   const [loading, setLoading] = useState(false);
+
+  // ← Avant, ce formulaire repartait toujours des valeurs par défaut à
+  // l'ouverture, donc chaque "Sauvegarder" écrasait silencieusement les
+  // vrais choix de l'utilisateur. On charge maintenant ceux stockés sur
+  // le compte.
+  useEffect(() => {
+    if (user) {
+      setPrefs({
+        ...DEFAULT_NOTIF_PREFS,
+        ...(user.notification_preferences ?? {}),
+      });
+    }
+  }, [user]);
 
   const toggle = (key: keyof NotifPrefs) =>
     setPrefs((p) => ({ ...p, [key]: !p[key] }));
@@ -338,7 +441,10 @@ function NotificationsTab({ onSaved }: { onSaved: () => void }) {
   const handleSave = async () => {
     setLoading(true);
     try {
-      await client.put("/profile", { notification_preferences: prefs });
+      const { data } = await client.put("/profile", {
+        notification_preferences: prefs,
+      });
+      updateUser(data.user ?? data);
       onSaved();
     } catch {
       // silencieux
@@ -351,9 +457,14 @@ function NotificationsTab({ onSaved }: { onSaved: () => void }) {
     { key: "messages", label: "Messages", desc: "Nouveaux messages reçus" },
     { key: "favorites", label: "Favoris", desc: "Activité sur vos favoris" },
     {
+      key: "posts",
+      label: "Nouvelles publications",
+      desc: "Publications des personnes que vous suivez",
+    },
+    {
       key: "new_listings",
       label: "Nouvelles annonces",
-      desc: "Annonces correspondant à vos critères",
+      desc: "Annonces des personnes que vous suivez",
     },
     {
       key: "lost_found",
@@ -416,19 +527,28 @@ function NotificationsTab({ onSaved }: { onSaved: () => void }) {
 // ── Onglet Confidentialité ─────────────────────────────────────
 
 function PrivacyTab({ onSaved }: { onSaved: () => void }) {
+  const { user, updateUser } = useAuth();
   const [profilePublic, setProfilePublic] = useState(true);
   const [showPhone, setShowPhone] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      setProfilePublic(user.privacy?.profile_public ?? true);
+      setShowPhone(user.privacy?.show_phone ?? false);
+    }
+  }, [user]);
+
   const handleSave = async () => {
     setLoading(true);
     try {
-      await client.put("/profile", {
+      const { data } = await client.put("/profile", {
         privacy: {
           profile_public: profilePublic,
           show_phone: showPhone,
         },
       });
+      updateUser(data.user ?? data);
       onSaved();
     } catch {
       // silencieux

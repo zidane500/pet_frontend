@@ -26,6 +26,7 @@ import { useProfile } from "../../hooks/useProfile";
 import { useListings } from "../../hooks/useListings";
 import { useCreateReport } from "../../hooks/useReports";
 import { useAuthStore } from "../../store/authStore";
+import { UserAvatar } from "../components/UserAvatar";
 import type { Listing } from "../../types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -412,9 +413,6 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
 
   // ── Derived ──
   const isOwnProfile = !userId || profileUser.id === currentUser?.id;
-  const avatar =
-    profileUser.avatar ??
-    `https://picsum.photos/seed/user-${profileUser.id}/200/200`;
   const cover = `https://picsum.photos/seed/cover-${profileUser.id}/800/300`;
   const since = memberSince(profileUser.created_at);
   const location =
@@ -553,14 +551,11 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
         <div className="flex items-end gap-4 mb-4">
           {/* Avatar */}
           <div className="relative flex-shrink-0">
-            <img
-              src={avatar}
-              alt={profileUser.name}
-              className="w-24 h-24 rounded-full object-cover ring-4 ring-[var(--pc-surface)] dark:ring-[#0D1117] shadow-xl"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "https://picsum.photos/seed/avatar-fb/200/200";
-              }}
+            <UserAvatar
+              name={profileUser.name}
+              avatar={profileUser.avatar}
+              size={96}
+              className="ring-4 ring-[var(--pc-surface)] dark:ring-[#0D1117] shadow-xl"
             />
             {profileUser.is_verified && (
               <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[var(--pc-primary)] rounded-full flex items-center justify-center shadow-lg">

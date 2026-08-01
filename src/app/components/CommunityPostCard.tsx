@@ -1,5 +1,6 @@
 import { Heart, MessageCircle } from "lucide-react";
 import { motion } from "motion/react";
+import { UserAvatar } from "./UserAvatar";
 import type { Listing } from "../../types";
 
 interface CommunityPostCardProps {
@@ -48,17 +49,10 @@ export function CommunityPostCard({
 
       <div className="p-3">
         <div className="flex items-center gap-2 mb-2">
-          <img
-            src={
-              listing.user?.avatar ??
-              `https://picsum.photos/seed/user-${listing.user_id}/50/50`
-            }
-            alt={listing.user?.name}
-            className="w-6 h-6 rounded-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src =
-                `https://picsum.photos/seed/${listing.user_id}/50/50`;
-            }}
+          <UserAvatar
+            name={listing.user?.name}
+            avatar={listing.user?.avatar}
+            size={24}
           />
           <span
             className="font-semibold truncate"

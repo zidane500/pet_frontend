@@ -7,6 +7,8 @@ import {
   ExternalLink,
   Loader2,
   MessageSquare,
+  Newspaper,
+  ShoppingBag,
   Trash2,
   User,
 } from "lucide-react";
@@ -21,26 +23,35 @@ import type { AppNotification, AppNotificationData } from "../../types";
 
 interface NotificationsPageProps {
   onBack: () => void;
+  onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
-type Category = "all" | "messages" | "annonces" | "adoptions" | "systeme";
+type Category =
+  | "all"
+  | "messages"
+  | "annonces"
+  | "adoptions"
+  | "communaute"
+  | "systeme";
 type ReadFilter = "all" | "unread";
 
 const CATEGORY_TABS: { key: Category; label: string }[] = [
   { key: "all", label: "Toutes" },
   { key: "messages", label: "💬 Messages" },
   { key: "annonces", label: "📋 Annonces" },
+  { key: "communaute", label: "🐾 Communauté" },
   { key: "adoptions", label: "💚 Adoptions" },
   { key: "systeme", label: "⭐ Système" },
 ];
 
 const ICON_COLORS: Record<string, string> = {
-  message: "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400",
-  listing:
+  messages: "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400",
+  annonces:
     "bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400",
-  favorite: "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400",
-  adoption: "bg-[var(--pc-primary)]/10 text-[var(--pc-primary)]",
-  system:
+  communaute:
+    "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400",
+  adoptions: "bg-[var(--pc-primary)]/10 text-[var(--pc-primary)]",
+  systeme:
     "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400",
 };
 
@@ -97,6 +108,8 @@ function groupLabel(date?: string | null): string {
 function actionLabel(type: string): string | null {
   if (type === "message") return "Ouvrir";
   if (type === "listing") return "Voir l’annonce";
+  if (type === "post") return "Voir la publication";
+  if (type === "product") return "Voir le produit";
   if (type === "profile") return "Voir le profil";
   return null;
 }
@@ -104,20 +117,31 @@ function actionLabel(type: string): string | null {
 function NotificationItem({
   notification,
   onMarkRead,
+  onOpen,
 }: {
   notification: AppNotification;
   onMarkRead: (id: string) => void;
+  onOpen: (notification: AppNotification) => void;
 }) {
   const data = safeData(notification);
   const isRead = Boolean(notification.read_at);
-  const color = ICON_COLORS[notification.type] ?? ICON_COLORS.system;
+  const color = ICON_COLORS[data.category] ?? ICON_COLORS.systeme;
   const ActionIcon =
     data.action_type === "message"
       ? MessageSquare
       : data.action_type === "profile"
         ? User
-        : ExternalLink;
+        : data.action_type === "post"
+          ? Newspaper
+          : data.action_type === "product"
+            ? ShoppingBag
+            : ExternalLink;
   const label = actionLabel(data.action_type);
+
+  const handleOpen = () => {
+    if (!isRead) onMarkRead(notification.id);
+    onOpen(notification);
+  };
 
   return (
     <motion.div
@@ -125,7 +149,7 @@ function NotificationItem({
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 10, height: 0 }}
-      onClick={() => !isRead && onMarkRead(notification.id)}
+      onClick={handleOpen}
       className={`flex items-start gap-3 px-4 py-4 cursor-pointer hover:bg-[var(--pc-surface-alt)] transition-colors ${
         !isRead ? "bg-[var(--pc-primary)]/[0.05]" : ""
       }`}
@@ -163,7 +187,7 @@ function NotificationItem({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onMarkRead(notification.id);
+                handleOpen();
               }}
               className="inline-flex items-center gap-1 rounded-full border border-[var(--pc-primary)]/40 px-2.5 py-0.5 text-[var(--pc-primary)] font-semibold hover:bg-[var(--pc-primary)]/10 transition-colors"
               style={{ fontSize: 10 }}
@@ -188,7 +212,10 @@ function NotificationItem({
   );
 }
 
-export function NotificationsPage({ onBack }: NotificationsPageProps) {
+export function NotificationsPage({
+  onBack,
+  onNavigate,
+}: NotificationsPageProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const [readFilter, setReadFilter] = useState<ReadFilter>("all");
@@ -231,6 +258,32 @@ export function NotificationsPage({ onBack }: NotificationsPageProps) {
 
   const handleMarkRead = (id: string) => {
     if (!markRead.isPending) markRead.mutate(id);
+  };
+
+  // ← "Comme Facebook" : cliquer sur une notification ouvre le contenu
+  // concerné (post, annonce, produit, profil, conversation).
+  const handleOpen = (notification: AppNotification) => {
+    const data = safeData(notification);
+    if (!data.action_id || data.action_type === "none") return;
+    const id = String(data.action_id);
+
+    switch (data.action_type) {
+      case "message":
+        onNavigate("messages", { userId: id });
+        break;
+      case "listing":
+        onNavigate("pet-detail", { id });
+        break;
+      case "post":
+        onNavigate("feed", { postId: id });
+        break;
+      case "product":
+        onNavigate("boutique-detail", { id });
+        break;
+      case "profile":
+        onNavigate("profile", { id });
+        break;
+    }
   };
 
   return (
@@ -368,6 +421,7 @@ export function NotificationsPage({ onBack }: NotificationsPageProps) {
                       key={notification.id}
                       notification={notification}
                       onMarkRead={handleMarkRead}
+                      onOpen={handleOpen}
                     />
                   ))}
                 </div>

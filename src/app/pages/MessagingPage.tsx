@@ -15,6 +15,7 @@ import {
   useConversations,
   useSendMessage,
 } from "../../hooks/useMessages";
+import { UserAvatar } from "../components/UserAvatar";
 import type { ConversationSummary, Message, User } from "../../types";
 
 interface MessagingPageProps {
@@ -33,20 +34,6 @@ function parsePositiveInt(value?: string): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function getInitials(name?: string | null): string {
-  return (name || "U")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-function fallbackAvatarSeed(id?: number | string | null): string {
-  return `https://picsum.photos/seed/user-${encodeURIComponent(String(id ?? "avatar"))}/96/96`;
 }
 
 function formatRelative(date?: string | null): string {
@@ -73,37 +60,6 @@ function messageTime(date?: string | null): string {
   });
 }
 
-function Avatar({
-  user,
-  size = "md",
-}: {
-  user?: Partial<User> | null;
-  size?: "sm" | "md";
-}) {
-  const [failed, setFailed] = useState(false);
-  const classes = size === "sm" ? "w-8 h-8 text-xs" : "w-11 h-11 text-sm";
-  const src = user?.avatar || fallbackAvatarSeed(user?.id);
-  const name = user?.name || "Utilisateur";
-
-  return (
-    <div
-      className={`${classes} rounded-full overflow-hidden flex-shrink-0 bg-[var(--pc-primary)] text-white flex items-center justify-center font-bold`}
-    >
-      {!failed && src ? (
-        <img
-          src={src}
-          alt={name}
-          className="w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        getInitials(name)
-      )}
-    </div>
-  );
-}
-
 function ConversationRow({
   conversation,
   active,
@@ -128,7 +84,7 @@ function ConversationRow({
           : "border-transparent hover:bg-[var(--pc-surface-alt)]"
       } ${isRtl ? "flex-row-reverse text-right border-l-0 border-r-2" : ""}`}
     >
-      <Avatar user={partner} />
+      <UserAvatar name={partner.name} avatar={partner.avatar} size={44} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <p className="truncate font-bold text-[var(--pc-text-primary)] text-sm">
@@ -459,7 +415,11 @@ export function MessagingPage({
                       className={isRtl ? "rotate-180" : ""}
                     />
                   </button>
-                  <Avatar user={activePartner} size="sm" />
+                  <UserAvatar
+                    name={activePartner.name}
+                    avatar={activePartner.avatar}
+                    size={32}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-[var(--pc-text-primary)] truncate">
                       {activePartner.name}
