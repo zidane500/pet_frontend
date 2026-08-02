@@ -66,6 +66,8 @@ export interface User {
   plan: "free" | "basic" | "premium" | "pro";
   is_verified: boolean;
   is_active: boolean;
+  followers_count?: number;
+  is_following?: boolean;
   locale: string;
   notification_preferences?: Record<string, boolean> | null;
   privacy?: Record<string, boolean> | null;

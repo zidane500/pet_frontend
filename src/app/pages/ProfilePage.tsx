@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ import { useCreateReport } from "../../hooks/useReports";
 import { useAuthStore } from "../../store/authStore";
 import { UserAvatar } from "../components/UserAvatar";
 import type { Listing } from "../../types";
+import { useToggleFollow } from "../../hooks/useFollows";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -387,6 +388,7 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
   const [activeTab, setActiveTab] = useState<Tab>("annonces");
   const [isFollowing, setIsFollowing] = useState(false);
   const [followAnim, setFollowAnim] = useState(false);
+  const toggleFollow = useToggleFollow();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [shareToast, setShareToast] = useState(false);
@@ -408,6 +410,10 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
     (l) => l.user_id === profileId,
   );
 
+  useEffect(() => {
+    if (profileUser) setIsFollowing(profileUser.is_following ?? false);
+  }, [profileUser]);
+
   if (!profileId || userLoading) return <LoadingState />;
   if (isError || !profileUser) return <ErrorState onBack={onBack} />;
 
@@ -419,9 +425,14 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
     [profileUser.city, profileUser.region].filter(Boolean).join(", ") || null;
 
   const handleFollowToggle = () => {
-    setIsFollowing((prev) => !prev);
+    const wasFollowing = isFollowing;
+    setIsFollowing(!wasFollowing);
     setFollowAnim(true);
     setTimeout(() => setFollowAnim(false), 600);
+
+    toggleFollow.mutate(profileUser.id, {
+      onError: () => setIsFollowing(wasFollowing), // rollback si l'API échoue
+    });
   };
 
   const handleShare = () => {
@@ -479,99 +490,224 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
         )}
       </AnimatePresence>
 
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4">
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md text-white hover:bg-black/50 transition-colors"
-        >
-          <ArrowLeft size={20} className={isRtl ? "rotate-180" : ""} />
-        </motion.button>
-        <div className="flex items-center gap-2">
+      {/* ── Conteneur centré (comme Instagram) ── */}
+      <div className="max-w-5xl mx-auto relative w-full">
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-4">
           <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={handleShare}
+            onClick={onBack}
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md text-white hover:bg-black/50 transition-colors"
           >
-            <Share2 size={18} />
+            <ArrowLeft size={20} className={isRtl ? "rotate-180" : ""} />
           </motion.button>
-          <div className="relative">
+          <div className="flex items-center gap-2">
             <motion.button
               whileTap={{ scale: 0.9 }}
-              onClick={() => setShowMoreMenu((v) => !v)}
+              onClick={handleShare}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md text-white hover:bg-black/50 transition-colors"
             >
-              <MoreHorizontal size={18} />
+              <Share2 size={18} />
             </motion.button>
-            <AnimatePresence>
-              {showMoreMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => setShowMoreMenu(false)}
-                  />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: -8 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: -8 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-12 z-40 w-48 glass-card rounded-2xl border border-[var(--pc-border)] shadow-xl overflow-hidden"
-                  >
-                    <button
-                      onClick={() => setShowReportModal(true)}
-                      className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            <div className="relative">
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => setShowMoreMenu((v) => !v)}
+                className="w-10 h-10 flex items-center justify-center rounded-xl bg-black/30 backdrop-blur-md text-white hover:bg-black/50 transition-colors"
+              >
+                <MoreHorizontal size={18} />
+              </motion.button>
+              <AnimatePresence>
+                {showMoreMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setShowMoreMenu(false)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: -8 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: -8 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 z-40 w-48 glass-card rounded-2xl border border-[var(--pc-border)] shadow-xl overflow-hidden"
                     >
-                      <Flag size={14} /> Signaler ce profil
-                    </button>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
+                      <button
+                        onClick={() => setShowReportModal(true)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <Flag size={14} /> Signaler ce profil
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Cover */}
-      <div className="relative h-40 sm:h-56 overflow-hidden">
-        <img
-          src={cover}
-          alt="cover"
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              "https://picsum.photos/seed/cover-default/800/300";
-          }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-      </div>
+        {/* Cover */}
+        <div className="relative h-40 sm:h-56 overflow-hidden">
+          <img
+            src={cover}
+            alt="cover"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src =
+                "https://picsum.photos/seed/cover-default/800/300";
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+        </div>
 
-      {/* Profile section */}
-      <div className="relative px-4 -mt-16">
-        <div className="flex items-end gap-4 mb-4">
-          {/* Avatar */}
-          <div className="relative flex-shrink-0">
-            <UserAvatar
-              name={profileUser.name}
-              avatar={profileUser.avatar}
-              size={96}
-              className="ring-4 ring-[var(--pc-surface)] dark:ring-[#0D1117] shadow-xl"
-            />
+        {/* Profile section */}
+        <div className="relative px-4 -mt-16">
+          <div className="flex items-end gap-4 mb-4">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
+              <UserAvatar
+                name={profileUser.name}
+                avatar={profileUser.avatar}
+                size={96}
+                className="ring-4 ring-[var(--pc-surface)] dark:ring-[#0D1117] shadow-xl"
+              />
+              {profileUser.is_verified && (
+                <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[var(--pc-primary)] rounded-full flex items-center justify-center shadow-lg">
+                  <BadgeCheck size={16} className="text-white" />
+                </div>
+              )}
+            </div>
+            <div className="flex-1" />
+          </div>
+
+          {/* User info */}
+          <div className="mb-4">
+            <div
+              className={`flex items-center justify-between gap-4 mb-1 ${isRtl ? "flex-row-reverse" : ""}`}
+            >
+              <div
+                className={`flex items-center gap-2 flex-wrap ${isRtl ? "flex-row-reverse" : ""}`}
+              >
+                <h1
+                  className="font-black text-[var(--pc-text-primary)]"
+                  style={{ fontFamily: "Sora, sans-serif", fontSize: "20px" }}
+                >
+                  {profileUser.name}
+                </h1>
+                {profileUser.is_verified && (
+                  <BadgeCheck size={20} className="text-[var(--pc-primary)]" />
+                )}
+                <span
+                  className="bg-[var(--pc-primary)]/10 text-[var(--pc-primary)] px-2.5 py-0.5 rounded-full font-semibold capitalize"
+                  style={{ fontSize: "11px" }}
+                >
+                  {profileUser.role}
+                </span>
+              </div>
+
+              {/* Actions (desktop) */}
+              <div
+                className={`hidden sm:flex items-center gap-2 ${isRtl ? "flex-row-reverse" : ""}`}
+              >
+                {isOwnProfile ? (
+                  <button
+                    onClick={() => onNavigate("settings")}
+                    className="px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
+                    style={{ fontSize: "13px" }}
+                  >
+                    Modifier le profil
+                  </button>
+                ) : (
+                  <>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      animate={followAnim ? { scale: [1, 1.12, 1] } : {}}
+                      onClick={handleFollowToggle}
+                      className={`px-5 py-2 rounded-xl font-bold transition-all bg-[var(--pc-primary)] text-white shadow-lg shadow-[var(--pc-primary)]/25 ${isFollowing ? "opacity-90" : ""}`}
+                      style={{ fontSize: "13px" }}
+                    >
+                      {isFollowing ? "Abonné ✓" : "Suivre"}
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleMessage}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
+                      style={{ fontSize: "13px" }}
+                    >
+                      <MessageCircle size={15} /> Message
+                    </motion.button>
+                  </>
+                )}
+              </div>
+            </div>
+            {profileUser.bio && (
+              <p
+                className="text-[var(--pc-text-secondary)] mb-3 leading-relaxed"
+                style={{ fontSize: "13px" }}
+              >
+                {profileUser.bio}
+              </p>
+            )}
+            <div
+              className={`flex flex-wrap items-center gap-3 text-[var(--pc-text-secondary)] ${isRtl ? "flex-row-reverse" : ""}`}
+              style={{ fontSize: "12px" }}
+            >
+              {location && (
+                <span
+                  className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}
+                >
+                  <MapPin size={12} /> {location}
+                </span>
+              )}
+              <span
+                className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}
+              >
+                <Calendar size={12} /> Membre depuis {since}
+              </span>
+            </div>
+          </div>
+
+          {/* Trust indicators */}
+          <div
+            className={`flex flex-wrap gap-2 mb-4 ${isRtl ? "flex-row-reverse" : ""}`}
+          >
             {profileUser.is_verified && (
-              <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[var(--pc-primary)] rounded-full flex items-center justify-center shadow-lg">
-                <BadgeCheck size={16} className="text-white" />
+              <div
+                className={`flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-1.5 ${isRtl ? "flex-row-reverse" : ""}`}
+              >
+                <Shield
+                  size={12}
+                  className="text-emerald-600 dark:text-emerald-400"
+                />
+                <span
+                  className="text-emerald-700 dark:text-emerald-400 font-semibold"
+                  style={{ fontSize: "11px" }}
+                >
+                  Compte vérifié
+                </span>
               </div>
             )}
+            <div
+              className={`flex items-center gap-1.5 bg-[var(--pc-surface-alt)] border border-[var(--pc-border)] rounded-xl px-3 py-1.5 ${isRtl ? "flex-row-reverse" : ""}`}
+            >
+              <Eye size={12} className="text-[var(--pc-text-secondary)]" />
+              <span
+                className="text-[var(--pc-text-secondary)] font-semibold"
+                style={{ fontSize: "11px" }}
+              >
+                {userListings.length} annonce
+                {userListings.length !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
-          <div className="flex-1" />
-          {/* Desktop actions */}
+
+          {/* Mobile actions */}
           <div
-            className={`hidden sm:flex items-center gap-2 pb-1 ${isRtl ? "flex-row-reverse" : ""}`}
+            className={`sm:hidden flex items-center gap-2 mb-5 ${isRtl ? "flex-row-reverse" : ""}`}
           >
             {isOwnProfile ? (
               <button
                 onClick={() => onNavigate("settings")}
-                className="px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
+                className="flex-1 py-2.5 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
                 style={{ fontSize: "13px" }}
               >
                 Modifier le profil
@@ -582,7 +718,7 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
                   whileTap={{ scale: 0.95 }}
                   animate={followAnim ? { scale: [1, 1.12, 1] } : {}}
                   onClick={handleFollowToggle}
-                  className={`px-5 py-2 rounded-xl font-bold transition-all ${isFollowing ? "border border-[var(--pc-border)] text-[var(--pc-text-secondary)]" : "bg-[var(--pc-primary)] text-white shadow-lg shadow-[var(--pc-primary)]/25"}`}
+                  className={`flex-1 py-2.5 rounded-xl font-bold transition-all bg-[var(--pc-primary)] text-white shadow-lg shadow-[var(--pc-primary)]/25 ${isFollowing ? "opacity-90" : ""}`}
                   style={{ fontSize: "13px" }}
                 >
                   {isFollowing ? "Abonné ✓" : "Suivre"}
@@ -590,7 +726,7 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={handleMessage}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
                   style={{ fontSize: "13px" }}
                 >
                   <MessageCircle size={15} /> Message
@@ -598,308 +734,193 @@ export function ProfilePage({ onBack, onNavigate, userId }: ProfilePageProps) {
               </>
             )}
           </div>
-        </div>
 
-        {/* User info */}
-        <div className="mb-4">
+          {/* Tabs */}
           <div
-            className={`flex items-center gap-2 flex-wrap mb-1 ${isRtl ? "flex-row-reverse" : ""}`}
+            className={`flex items-center border-b border-[var(--pc-border)] mb-5 ${isRtl ? "flex-row-reverse" : ""}`}
           >
-            <h1
-              className="font-black text-[var(--pc-text-primary)]"
-              style={{ fontFamily: "Sora, sans-serif", fontSize: "20px" }}
-            >
-              {profileUser.name}
-            </h1>
-            {profileUser.is_verified && (
-              <BadgeCheck size={20} className="text-[var(--pc-primary)]" />
-            )}
-            <span
-              className="bg-[var(--pc-primary)]/10 text-[var(--pc-primary)] px-2.5 py-0.5 rounded-full font-semibold capitalize"
-              style={{ fontSize: "11px" }}
-            >
-              {profileUser.role}
-            </span>
-          </div>
-          {profileUser.bio && (
-            <p
-              className="text-[var(--pc-text-secondary)] mb-3 leading-relaxed"
-              style={{ fontSize: "13px" }}
-            >
-              {profileUser.bio}
-            </p>
-          )}
-          <div
-            className={`flex flex-wrap items-center gap-3 text-[var(--pc-text-secondary)] ${isRtl ? "flex-row-reverse" : ""}`}
-            style={{ fontSize: "12px" }}
-          >
-            {location && (
-              <span
-                className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}
-              >
-                <MapPin size={12} /> {location}
-              </span>
-            )}
-            <span
-              className={`flex items-center gap-1 ${isRtl ? "flex-row-reverse" : ""}`}
-            >
-              <Calendar size={12} /> Membre depuis {since}
-            </span>
-          </div>
-        </div>
-
-        {/* Trust indicators */}
-        <div
-          className={`flex flex-wrap gap-2 mb-4 ${isRtl ? "flex-row-reverse" : ""}`}
-        >
-          {profileUser.is_verified && (
-            <div
-              className={`flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-1.5 ${isRtl ? "flex-row-reverse" : ""}`}
-            >
-              <Shield
-                size={12}
-                className="text-emerald-600 dark:text-emerald-400"
-              />
-              <span
-                className="text-emerald-700 dark:text-emerald-400 font-semibold"
-                style={{ fontSize: "11px" }}
-              >
-                Compte vérifié
-              </span>
-            </div>
-          )}
-          <div
-            className={`flex items-center gap-1.5 bg-[var(--pc-surface-alt)] border border-[var(--pc-border)] rounded-xl px-3 py-1.5 ${isRtl ? "flex-row-reverse" : ""}`}
-          >
-            <Eye size={12} className="text-[var(--pc-text-secondary)]" />
-            <span
-              className="text-[var(--pc-text-secondary)] font-semibold"
-              style={{ fontSize: "11px" }}
-            >
-              {userListings.length} annonce
-              {userListings.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
-
-        {/* Mobile actions */}
-        <div
-          className={`sm:hidden flex items-center gap-2 mb-5 ${isRtl ? "flex-row-reverse" : ""}`}
-        >
-          {isOwnProfile ? (
-            <button
-              onClick={() => onNavigate("settings")}
-              className="flex-1 py-2.5 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
-              style={{ fontSize: "13px" }}
-            >
-              Modifier le profil
-            </button>
-          ) : (
-            <>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                animate={followAnim ? { scale: [1, 1.12, 1] } : {}}
-                onClick={handleFollowToggle}
-                className={`flex-1 py-2.5 rounded-xl font-bold transition-all ${isFollowing ? "border border-[var(--pc-border)] text-[var(--pc-text-secondary)]" : "bg-[var(--pc-primary)] text-white shadow-lg shadow-[var(--pc-primary)]/25"}`}
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`relative px-4 py-3 font-semibold transition-colors whitespace-nowrap ${activeTab === key ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)]"}`}
                 style={{ fontSize: "13px" }}
               >
-                {isFollowing ? "Abonné ✓" : "Suivre"}
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={handleMessage}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] font-semibold hover:border-[var(--pc-primary)] hover:text-[var(--pc-primary)] transition-all"
-                style={{ fontSize: "13px" }}
-              >
-                <MessageCircle size={15} /> Message
-              </motion.button>
-            </>
-          )}
-        </div>
-
-        {/* Tabs */}
-        <div
-          className={`flex items-center border-b border-[var(--pc-border)] mb-5 ${isRtl ? "flex-row-reverse" : ""}`}
-        >
-          {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setActiveTab(key)}
-              className={`relative px-4 py-3 font-semibold transition-colors whitespace-nowrap ${activeTab === key ? "text-[var(--pc-primary)]" : "text-[var(--pc-text-secondary)] hover:text-[var(--pc-text-primary)]"}`}
-              style={{ fontSize: "13px" }}
-            >
-              {label}
-              {activeTab === key && (
-                <motion.div
-                  layoutId="profile-tab-indicator"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--pc-primary)] rounded-full"
-                />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <AnimatePresence mode="wait">
-          {activeTab === "annonces" && (
-            <motion.div
-              key="annonces"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className="pb-8"
-            >
-              {listingsLoading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2
-                    size={28}
-                    className="animate-spin text-[var(--pc-primary)]"
+                {label}
+                {activeTab === key && (
+                  <motion.div
+                    layoutId="profile-tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--pc-primary)] rounded-full"
                   />
-                </div>
-              ) : userListings.length === 0 ? (
-                <div className="text-center py-16 text-[var(--pc-text-secondary)]">
-                  <div className="text-4xl mb-3">📋</div>
-                  <p className="font-medium">Aucune annonce publiée</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {userListings.map((listing) => (
-                    <ListingMiniCard
-                      key={listing.id}
-                      listing={listing}
-                      onClick={() =>
-                        onNavigate("pet-detail", { id: String(listing.id) })
-                      }
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <AnimatePresence mode="wait">
+            {activeTab === "annonces" && (
+              <motion.div
+                key="annonces"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="pb-8"
+              >
+                {listingsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2
+                      size={28}
+                      className="animate-spin text-[var(--pc-primary)]"
                     />
-                  ))}
+                  </div>
+                ) : userListings.length === 0 ? (
+                  <div className="text-center py-16 text-[var(--pc-text-secondary)]">
+                    <div className="text-4xl mb-3">📋</div>
+                    <p className="font-medium">Aucune annonce publiée</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {userListings.map((listing) => (
+                      <ListingMiniCard
+                        key={listing.id}
+                        listing={listing}
+                        onClick={() =>
+                          onNavigate("pet-detail", { id: String(listing.id) })
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === "avis" && (
+              <motion.div
+                key="avis"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col items-center py-20 gap-4 text-center pb-8"
+              >
+                <div className="w-20 h-20 rounded-full bg-[var(--pc-surface-alt)] flex items-center justify-center text-4xl">
+                  ⭐
                 </div>
-              )}
-            </motion.div>
-          )}
+                <p className="text-[var(--pc-text-secondary)] text-sm font-medium">
+                  Les avis arrivent bientôt
+                </p>
+              </motion.div>
+            )}
 
-          {activeTab === "avis" && (
-            <motion.div
-              key="avis"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col items-center py-20 gap-4 text-center pb-8"
-            >
-              <div className="w-20 h-20 rounded-full bg-[var(--pc-surface-alt)] flex items-center justify-center text-4xl">
-                ⭐
-              </div>
-              <p className="text-[var(--pc-text-secondary)] text-sm font-medium">
-                Les avis arrivent bientôt
-              </p>
-            </motion.div>
-          )}
-
-          {activeTab === "apropos" && (
-            <motion.div
-              key="apropos"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col gap-4 pb-8"
-            >
-              {profileUser.bio && (
+            {activeTab === "apropos" && (
+              <motion.div
+                key="apropos"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4 pb-8"
+              >
+                {profileUser.bio && (
+                  <div
+                    className="glass-card rounded-2xl p-4"
+                    style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
+                  >
+                    <p
+                      className="font-bold text-[var(--pc-text-primary)] mb-2"
+                      style={{ fontSize: "13px" }}
+                    >
+                      Bio
+                    </p>
+                    <p
+                      className="text-[var(--pc-text-secondary)] leading-relaxed"
+                      style={{ fontSize: "13px" }}
+                    >
+                      {profileUser.bio}
+                    </p>
+                  </div>
+                )}
+                <div
+                  className="glass-card rounded-2xl p-4 flex flex-col gap-3"
+                  style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Calendar size={14} className="text-[var(--pc-primary)]" />
+                    <span
+                      className="text-[var(--pc-text-secondary)]"
+                      style={{ fontSize: "12px" }}
+                    >
+                      Membre depuis {since}
+                    </span>
+                  </div>
+                  {profileUser.is_verified && (
+                    <div className="flex items-center gap-2">
+                      <Shield size={14} className="text-emerald-500" />
+                      <span
+                        className="text-emerald-600 dark:text-emerald-400 font-semibold"
+                        style={{ fontSize: "12px" }}
+                      >
+                        Compte vérifié
+                      </span>
+                    </div>
+                  )}
+                  {location && (
+                    <div className="flex items-center gap-2">
+                      <MapPin size={14} className="text-[var(--pc-primary)]" />
+                      <span
+                        className="text-[var(--pc-text-secondary)]"
+                        style={{ fontSize: "12px" }}
+                      >
+                        {location}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Clock size={14} className="text-blue-500" />
+                    <span
+                      className="text-[var(--pc-text-secondary)]"
+                      style={{ fontSize: "12px" }}
+                    >
+                      Rôle :{" "}
+                      <span className="capitalize font-medium">
+                        {profileUser.role}
+                      </span>
+                    </span>
+                  </div>
+                </div>
                 <div
                   className="glass-card rounded-2xl p-4"
                   style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
                 >
                   <p
-                    className="font-bold text-[var(--pc-text-primary)] mb-2"
+                    className="font-bold text-[var(--pc-text-primary)] mb-3"
                     style={{ fontSize: "13px" }}
                   >
-                    Bio
+                    Réseaux sociaux
                   </p>
-                  <p
-                    className="text-[var(--pc-text-secondary)] leading-relaxed"
-                    style={{ fontSize: "13px" }}
-                  >
-                    {profileUser.bio}
-                  </p>
-                </div>
-              )}
-              <div
-                className="glass-card rounded-2xl p-4 flex flex-col gap-3"
-                style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Calendar size={14} className="text-[var(--pc-primary)]" />
-                  <span
-                    className="text-[var(--pc-text-secondary)]"
-                    style={{ fontSize: "12px" }}
-                  >
-                    Membre depuis {since}
-                  </span>
-                </div>
-                {profileUser.is_verified && (
-                  <div className="flex items-center gap-2">
-                    <Shield size={14} className="text-emerald-500" />
-                    <span
-                      className="text-emerald-600 dark:text-emerald-400 font-semibold"
+                  <div className="flex gap-3">
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-pink-400 hover:text-pink-500 transition-all"
                       style={{ fontSize: "12px" }}
                     >
-                      Compte vérifié
-                    </span>
-                  </div>
-                )}
-                {location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin size={14} className="text-[var(--pc-primary)]" />
-                    <span
-                      className="text-[var(--pc-text-secondary)]"
+                      <Instagram size={14} /> Instagram
+                    </button>
+                    <button
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-blue-500 hover:text-blue-600 transition-all"
                       style={{ fontSize: "12px" }}
                     >
-                      {location}
-                    </span>
+                      <Facebook size={14} /> Facebook
+                    </button>
                   </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Clock size={14} className="text-blue-500" />
-                  <span
-                    className="text-[var(--pc-text-secondary)]"
-                    style={{ fontSize: "12px" }}
-                  >
-                    Rôle :{" "}
-                    <span className="capitalize font-medium">
-                      {profileUser.role}
-                    </span>
-                  </span>
                 </div>
-              </div>
-              <div
-                className="glass-card rounded-2xl p-4"
-                style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}
-              >
-                <p
-                  className="font-bold text-[var(--pc-text-primary)] mb-3"
-                  style={{ fontSize: "13px" }}
-                >
-                  Réseaux sociaux
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-pink-400 hover:text-pink-500 transition-all"
-                    style={{ fontSize: "12px" }}
-                  >
-                    <Instagram size={14} /> Instagram
-                  </button>
-                  <button
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[var(--pc-border)] text-[var(--pc-text-secondary)] hover:border-blue-500 hover:text-blue-600 transition-all"
-                    style={{ fontSize: "12px" }}
-                  >
-                    <Facebook size={14} /> Facebook
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* ── Fin du conteneur centré ── */}
       </div>
     </div>
   );
